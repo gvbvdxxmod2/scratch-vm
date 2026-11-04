@@ -511,6 +511,35 @@ class Runtime extends EventEmitter {
          * This mode is used by the TurboWarp Packager.
          */
         this.isPackaged = false;
+
+
+
+        this.__emit = this.emit;
+        this.__on = this.on;
+        this.__once = this.__once;
+        var _this = this;
+        this.emit = function (name, ...eventArgs) {
+            if (!name) {
+                return;
+            }
+            _this.__emit(name, ...eventArgs);
+        };
+
+        this.on = function (name, ...eventArgs) {
+            if (!name) {
+                console.warn("Tried to use on() call with empty name.");
+                return;
+            }
+            _this.__on(name, ...eventArgs);
+        };
+
+        this.once = function (name, ...eventArgs) {
+            if (!name) {
+                console.warn("Tried to use once() call with empty name.");
+                return;
+            }
+            _this.__once(name, ...eventArgs);
+        };
     }
 
     startHats2(a, b, c) {

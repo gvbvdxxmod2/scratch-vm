@@ -3,6 +3,8 @@ const dispatch = require('../dispatch/central-dispatch');
 const log = require('../util/log');
 const maybeFormatMessage = require('../util/maybe-format-message');
 
+var SecurityManager = require("./security-manager.js");
+
 const BlockType = require('./block-type');
 
 // These extensions are currently built into the VM repository but should not be loaded at startup.
@@ -28,27 +30,27 @@ const builtinExtensions = {
     // tw: core extension
     tw: () => require('../extensions/tw'),
 	// gvbvdxx mod -- extensions
-	dialogs: () => require('../extensions/scratch3_dialog'),
-	speech4pc: () => require('../extensions/speech4pc'),
-	websites: () => require('../extensions/scratch3_websites'),
-	betteraudio: () => require('../extensions/scratch3_better_audio'),
-	speech2text: () => require('../extensions/scratch3_speech2text'),
-	gamepad: () => require('../extensions/scratch3_gamepad'),
-	webmidi: () => require('../extensions/scratch3_webmidi'),
-	beepboxsynth: () => require('../extensions/scratch3_beepbox_synth'),
-	websocket: () => require('../extensions/scratch3_websocket'),
-	audioctx: () => require('../extensions/scratch3_audio_context'),
-	extra: () => require('../extensions/scratch3_extra'),
-	userdata: () => require('../extensions/scratch3_user_data'),
-	roku: () => require('../extensions/scratch3_roku'),
-	html5: () => require('../extensions/html5_elements'),
-	nesemulator: () => require('../extensions/nesemulator'),
-	sndanalyser: () => require('../extensions/gm2_projectsound'),
-	spritecanvas: () => require('../extensions/spritecanvas')
+	//dialogs: () => require('../extensions/scratch3_dialog'),
+	//speech4pc: () => require('../extensions/speech4pc'),
+	//websites: () => require('../extensions/scratch3_websites'),
+	//betteraudio: () => require('../extensions/scratch3_better_audio'),
+	//speech2text: () => require('../extensions/scratch3_speech2text'),
+	//gamepad: () => require('../extensions/scratch3_gamepad'),
+	//webmidi: () => require('../extensions/scratch3_webmidi'),
+	//beepboxsynth: () => require('../extensions/scratch3_beepbox_synth'),
+	//websocket: () => require('../extensions/scratch3_websocket'),
+	//audioctx: () => require('../extensions/scratch3_audio_context'),
+	//extra: () => require('../extensions/scratch3_extra'),
+	//userdata: () => require('../extensions/scratch3_user_data'),
+	//roku: () => require('../extensions/scratch3_roku'),
+	//html5: () => require('../extensions/html5_elements'),
+	//nesemulator: () => require('../extensions/nesemulator'),
+	//sndanalyser: () => require('../extensions/gm2_projectsound'),
+	//spritecanvas: () => require('../extensions/spritecanvas')
 };
 
 //INIT Tw extensions
-
+/*
 var twJSON = require('../turbowarp-extensions/extensions-tw.json');
 twJSON.extensions.forEach((ext) => {
 	if (!ext.slug) {
@@ -78,7 +80,7 @@ extensionInfo.forEach((ext) => {
 	loadTWExtension(ext.id,"other-js-extensions/"+ext.file+".js");
 	ext.gui.imageURL = require("../other-js-extensions/"+ext.gui.image);
 });
-window.GvbvdxxMod2AddedExtensionInfo = extensionInfo;
+window.GvbvdxxMod2AddedExtensionInfo = extensionInfo;*/
 
 
 /**
@@ -168,6 +170,8 @@ class ExtensionManager {
 
         this.loadingAsyncExtensions = 0;
         this.asyncExtensionsLoadedCallbacks = [];
+
+        this.securityManager = new SecurityManager();
 
         dispatch.setService('extensions', createExtensionService(this)).catch(e => {
             log.error(`ExtensionManager was unable to register extension service: ${JSON.stringify(e)}`);
@@ -270,9 +274,10 @@ class ExtensionManager {
 
         return new Promise((resolve, reject) => {
             this.pendingExtensions.push({extensionURL, resolve, reject});
-            this.createExtensionWorker()
+            /*this.createExtensionWorker()
                 .then(worker => dispatch.addWorker(worker))
-                .catch(error => reject(error));
+                .catch(error => reject(error));*/
+                reject("Unsupported for now");
         });
     }
 
@@ -288,23 +293,7 @@ class ExtensionManager {
             this.asyncExtensionsLoadedCallbacks.push(resolve);
         });
     }
-
-    /**
-     * Creates a new extension worker.
-     * @returns {Promise}
-     */
-    createExtensionWorker () {
-        if (this.workerMode === 'worker') {
-            // eslint-disable-next-line max-len
-            const ExtensionWorker = require('worker-loader?name=js/extension-worker/extension-worker.[hash].js!./extension-worker');
-            return Promise.resolve(new ExtensionWorker());
-        } else if (this.workerMode === 'iframe') {
-            return import(/* webpackChunkName: "iframe-extension-worker" */ './tw-iframe-extension-worker')
-                .then(mod => new mod.default());
-        }
-        return Promise.reject(new Error('Unknown extension worker mode'));
-    }
-
+    
     /**
      * Regenerate blockinfo for any loaded extensions
      * @returns {Promise} resolved once all the extensions have been reinitialized

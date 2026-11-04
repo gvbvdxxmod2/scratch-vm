@@ -6,7 +6,7 @@ if (typeof TextEncoder === 'undefined') {
     _TextEncoder = TextEncoder;
 }
 const EventEmitter = require('events');
-const JSZip = require('jszip');
+const JSZip = require('@gvbvdxxmod2/jszip');
 const RenderedTarget = require('./sprites/rendered-target');
 const Sprite = require('./sprites/sprite');
 const Buffer = require('buffer').Buffer;
@@ -211,6 +211,33 @@ class VirtualMachine extends EventEmitter {
         this.flyoutBlockListener = this.flyoutBlockListener.bind(this);
         this.monitorBlockListener = this.monitorBlockListener.bind(this);
         this.variableListener = this.variableListener.bind(this);
+
+        this.__emit = this.emit;
+        this.__on = this.on;
+        this.__once = this.__once;
+        var _this = this;
+        this.emit = function (name, ...eventArgs) {
+            if (!name) {
+                return;
+            }
+            _this.__emit(name, ...eventArgs);
+        };
+
+        this.on = function (name, ...eventArgs) {
+            if (!name) {
+                console.warn("Tried to use on() call with empty name.");
+                return;
+            }
+            _this.__on(name, ...eventArgs);
+        };
+
+        this.once = function (name, ...eventArgs) {
+            if (!name) {
+                console.warn("Tried to use once() call with empty name.");
+                return;
+            }
+            _this.__once(name, ...eventArgs);
+        };
 		
     }
 
@@ -226,6 +253,10 @@ class VirtualMachine extends EventEmitter {
      * Note: This only stops the loop. It will not stop any threads the next time the VM starts
      */
     stop () {
+        this.runtime.stop();
+    }
+
+    quit () {
         this.runtime.stop();
     }
 
@@ -499,10 +530,7 @@ class VirtualMachine extends EventEmitter {
         });
     }
 
-    /**
-     * @returns {string} Project in a Scratch 3.0 JSON representation.
-     */
-    saveProjectSb3 () {
+    _saveProjectZip () {
         const soundDescs = serializeSounds(this.runtime);
         const costumeDescs = serializeCostumes(this.runtime);
         const projectJson = this.toJSON();
@@ -515,15 +543,27 @@ class VirtualMachine extends EventEmitter {
         zip.file('project.json', projectJson);
         this._addFileDescsToZip(soundDescs.concat(costumeDescs), zip);
 
-        return zip.generateAsync({
-            type: 'blob',
-            mimeType: 'application/x.scratch.sb3',
-            compression: 'DEFLATE',
-            compressionOptions: {
-                level: 6 // Tradeoff between best speed (1) and best compression (9)
-            }
+        return zip;
+    }
+
+    /**
+     * @returns {string} Project in a Scratch 3.0 JSON representation.
+     */
+    saveProjectSb3 () {
+        return this._saveProjectZip().generateAsync({
+            // Don't configure compression here. _saveProjectZip() will set it for each file.
+            type: type || 'blob',
+            mimeType: 'application/x.scratch.sb3'
         });
     }
+
+    saveProjectSb3Stream (type) {
+            return this._saveProjectZip().generateInternalStream({
+                type: type || 'arraybuffer',
+                mimeType: 'application/x.scratch.sb3',
+                compression: 'DEFLATE'
+            });
+        }
 
     /**
      * tw: Serailize the project into a map of files without actually zipping the project.
