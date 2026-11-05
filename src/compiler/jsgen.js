@@ -920,27 +920,24 @@ class JSGenerator {
 
         case 'list.add': {
             const list = this.referenceVariable(node.list);
-            this.source += `${list}.value.push(${this.descendInput(node.item).asSafe()});\n`;
+            this.source += `${list}.value.push(${this.descendInput(node.item)});\n`;
             this.source += `${list}._monitorUpToDate = false;\n`;
             break;
         }
         case 'list.delete': {
             const list = this.referenceVariable(node.list);
-            const index = this.descendInput(node.index);
-            if (index instanceof ConstantInput) {
-                if (index.constantValue === 'last') {
-                    this.source += `${list}.value.pop();\n`;
-                    this.source += `${list}._monitorUpToDate = false;\n`;
-                    break;
-                }
-                if (+index.constantValue === 1) {
-                    this.source += `${list}.value.shift();\n`;
-                    this.source += `${list}._monitorUpToDate = false;\n`;
-                    break;
-                }
-                // do not need a special case for all as that is handled in IR generation (list.deleteAll)
+            if (node.index.isConstant('last')) {
+                this.source += `${list}.value.pop();\n`;
+                this.source += `${list}._monitorUpToDate = false;\n`;
+                break;
             }
-            this.source += `listDelete(${list}, ${index.asUnknown()});\n`;
+            if (node.index.isConstant(1)) {
+                this.source += `${list}.value.shift();\n`;
+                this.source += `${list}._monitorUpToDate = false;\n`;
+                break;
+            }
+            // do not need a special case for all as that is handled in IR generation (list.deleteAll)
+            this.source += `listDelete(${list}, ${this.descendInput(node.index)});\n`;
             break;
         }
         case 'list.deleteAll':

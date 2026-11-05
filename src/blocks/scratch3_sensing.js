@@ -72,7 +72,8 @@ class Scratch3SensingBlocks {
             sensing_askandwait: this.askAndWait,
             sensing_answer: this.getAnswer,
             sensing_username: this.getUsername,
-            sensing_userid: () => {} // legacy no-op block
+            sensing_userid: () => {}, // legacy no-op block
+            sensing_online: this.isOnline
         };
     }
 
@@ -330,6 +331,15 @@ class Scratch3SensingBlocks {
 
     getUsername (args, util) {
         return util.ioQuery('userData', 'getUsername');
+    }
+
+    isOnline () {
+        // Modern Node.js has a navigator object but does .onLine === undefined
+        if (typeof navigator === 'object' && typeof navigator.onLine === 'boolean') {
+            return navigator.onLine;
+        }
+        // We're running in some non-browser environment. We probably have internet.
+        return true;
     }
 }
 

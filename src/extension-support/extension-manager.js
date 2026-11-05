@@ -4,6 +4,7 @@ const log = require('../util/log');
 const maybeFormatMessage = require('../util/maybe-format-message');
 
 var SecurityManager = require("./security-manager.js");
+var ExtensionRunner = require("./gm2-tw-extension-runner.js");
 
 const BlockType = require('./block-type');
 
@@ -167,6 +168,8 @@ class ExtensionManager {
          * @type {Runtime}
          */
         this.runtime = runtime;
+
+        this.extensionRunner = new ExtensionRunner(this, runtime);
 
         this.loadingAsyncExtensions = 0;
         this.asyncExtensionsLoadedCallbacks = [];

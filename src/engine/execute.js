@@ -100,11 +100,11 @@ const handleReport = function (resolvedValue, sequencer, thread, blockCached, la
                     // Target no longer exists
                     return;
                 }
-                sequencer.runtime.requestUpdateMonitor(Map({
+                sequencer.runtime.requestUpdateMonitor({
                     id: currentBlockId,
                     spriteName: targetId ? sequencer.runtime.getTargetById(targetId).getName() : null,
                     value: resolvedValue
-                }));
+                });
             }
         }
         // Finished any yields.

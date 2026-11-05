@@ -3,7 +3,6 @@ const mutationAdapter = require('./mutation-adapter');
 const xmlEscape = require('../util/xml-escape');
 const MonitorRecord = require('./monitor-record');
 const Clone = require('../util/clone');
-const {Map} = require('immutable');
 const BlocksExecuteCache = require('./blocks-execute-cache');
 const BlocksRuntimeCache = require('./blocks-runtime-cache');
 const log = require('../util/log');
@@ -646,6 +645,10 @@ class Blocks {
         if (Object.prototype.hasOwnProperty.call(this._blocks, block.id)) {
             return;
         }
+        // No prototype pollution.
+        if (block.id === '__proto__') {
+            return;
+        }
         // Create new block.
         this._blocks[block.id] = block;
         // Push block id to scripts array.
@@ -711,10 +714,10 @@ class Blocks {
 
                 const flyoutBlock = block.shadow && block.parent ? this._blocks[block.parent] : block;
                 if (flyoutBlock.isMonitored) {
-                    this.runtime.requestUpdateMonitor(Map({
+                    this.runtime.requestUpdateMonitor({
                         id: flyoutBlock.id,
                         params: this._getBlockParams(flyoutBlock)
-                    }));
+                    });
                 }
             }
             break;
@@ -722,6 +725,7 @@ class Blocks {
             block.mutation = mutationAdapter(args.value);
             break;
         case 'checkbox': {
+            //window.alert("Handling checkbox");
             // A checkbox usually has a one to one correspondence with the monitor
             // block but in the case of monitored reporters that have arguments,
             // map the old id to a new id, creating a new monitor block if necessary
@@ -773,7 +777,7 @@ class Blocks {
             } else if (!wasMonitored && block.isMonitored) {
                 // Tries to show the monitor for specified block. If it doesn't exist, add the monitor.
                 if (!this.runtime.requestShowMonitor(block.id)) {
-                    this.runtime.requestAddMonitor(MonitorRecord({
+                    this.runtime.requestAddMonitor(new MonitorRecord({
                         id: block.id,
                         targetId: block.targetId,
                         spriteName: block.targetId ? this.runtime.getTargetById(block.targetId).getName() : null,

@@ -22,6 +22,7 @@ const xmlEscape = require('../util/xml-escape');
 const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
 const ExtendedJSON = require('../util/tw-extended-json');
 const FontManager = require('./tw-font-manager');
+const MonitorState = require('./tw-monitor-state.js');
 
 // Virtual I/O devices.
 const Clock = require('../io/clock');
@@ -344,7 +345,7 @@ class Runtime extends EventEmitter {
         /**
          * Ordered map of all monitors, which are MonitorReporter objects.
          */
-        this._monitorState = OrderedMap({});
+        this._monitorState = new MonitorState();
 
         /**
          * Monitor state from last tick
@@ -627,7 +628,7 @@ class Runtime extends EventEmitter {
      * Width of the stage, in pixels.
      * @const {number}
      */
-    static get STAGE_WIDTH() {
+    static get STAGE_WIDTH () {
         // tw: stage size is set per-runtime, this is only the initial value
         return 480;
     }
@@ -636,7 +637,7 @@ class Runtime extends EventEmitter {
      * Height of the stage, in pixels.
      * @const {number}
      */
-    static get STAGE_HEIGHT() {
+    static get STAGE_HEIGHT () {
         // tw: stage size is set per-runtime, this is only the initial value
         return 360;
     }
@@ -645,7 +646,7 @@ class Runtime extends EventEmitter {
      * Event name for glowing a script.
      * @const {string}
      */
-    static get SCRIPT_GLOW_ON() {
+    static get SCRIPT_GLOW_ON () {
         return 'SCRIPT_GLOW_ON';
     }
 
@@ -653,7 +654,7 @@ class Runtime extends EventEmitter {
      * Event name for unglowing a script.
      * @const {string}
      */
-    static get SCRIPT_GLOW_OFF() {
+    static get SCRIPT_GLOW_OFF () {
         return 'SCRIPT_GLOW_OFF';
     }
 
@@ -661,7 +662,7 @@ class Runtime extends EventEmitter {
      * Event name for glowing a block.
      * @const {string}
      */
-    static get BLOCK_GLOW_ON() {
+    static get BLOCK_GLOW_ON () {
         return 'BLOCK_GLOW_ON';
     }
 
@@ -669,7 +670,7 @@ class Runtime extends EventEmitter {
      * Event name for unglowing a block.
      * @const {string}
      */
-    static get BLOCK_GLOW_OFF() {
+    static get BLOCK_GLOW_OFF () {
         return 'BLOCK_GLOW_OFF';
     }
 
@@ -678,7 +679,7 @@ class Runtime extends EventEmitter {
      * to this project.
      * @const {string}
      */
-    static get HAS_CLOUD_DATA_UPDATE() {
+    static get HAS_CLOUD_DATA_UPDATE () {
         return 'HAS_CLOUD_DATA_UPDATE';
     }
 
@@ -686,7 +687,7 @@ class Runtime extends EventEmitter {
      * Event name for turning on turbo mode.
      * @const {string}
      */
-    static get TURBO_MODE_ON() {
+    static get TURBO_MODE_ON () {
         return 'TURBO_MODE_ON';
     }
 
@@ -694,7 +695,7 @@ class Runtime extends EventEmitter {
      * Event name for turning off turbo mode.
      * @const {string}
      */
-    static get TURBO_MODE_OFF() {
+    static get TURBO_MODE_OFF () {
         return 'TURBO_MODE_OFF';
     }
 
@@ -702,7 +703,7 @@ class Runtime extends EventEmitter {
      * Event name for runtime options changing.
      * @const {string}
      */
-    static get RUNTIME_OPTIONS_CHANGED() {
+    static get RUNTIME_OPTIONS_CHANGED () {
         return 'RUNTIME_OPTIONS_CHANGED';
     }
 
@@ -710,7 +711,7 @@ class Runtime extends EventEmitter {
      * Event name for compiler options changing.
      * @const {string}
      */
-    static get COMPILER_OPTIONS_CHANGED() {
+    static get COMPILER_OPTIONS_CHANGED () {
         return 'COMPILER_OPTIONS_CHANGED';
     }
 
@@ -718,7 +719,7 @@ class Runtime extends EventEmitter {
      * Event name for framerate changing.
      * @const {string}
      */
-    static get FRAMERATE_CHANGED() {
+    static get FRAMERATE_CHANGED () {
         return 'FRAMERATE_CHANGED';
     }
 
@@ -726,7 +727,7 @@ class Runtime extends EventEmitter {
      * Event name for interpolation changing.
      * @const {string}
      */
-    static get INTERPOLATION_CHANGED() {
+    static get INTERPOLATION_CHANGED () {
         return 'INTERPOLATION_CHANGED';
     }
 
@@ -734,7 +735,7 @@ class Runtime extends EventEmitter {
      * Event name for stage size changing.
      * @const {string}
      */
-    static get STAGE_SIZE_CHANGED() {
+    static get STAGE_SIZE_CHANGED () {
         return 'STAGE_SIZE_CHANGED';
     }
 
@@ -742,8 +743,30 @@ class Runtime extends EventEmitter {
      * Event name for compiler errors.
      * @const {string}
      */
-    static get COMPILE_ERROR() {
+    static get COMPILE_ERROR () {
         return 'COMPILE_ERROR';
+    }
+
+    /**
+     * Event called before any block is executed.
+     */
+    static get BEFORE_EXECUTE () {
+        return 'BEFORE_EXECUTE';
+    }
+
+    /**
+     * Event called after every block in the project has been executed.
+     */
+    static get AFTER_EXECUTE () {
+        return 'AFTER_EXECUTE';
+    }
+
+    /**
+     * Event name for reporting asset download progress. Fired with finished, total
+     * @const {string}
+     */
+    static get ASSET_PROGRESS () {
+        return 'ASSET_PROGRESS';
     }
 
     /**
@@ -751,7 +774,7 @@ class Runtime extends EventEmitter {
      * running).
      * @const {string}
      */
-    static get PROJECT_START() {
+    static get PROJECT_START () {
         return 'PROJECT_START';
     }
 
@@ -760,7 +783,7 @@ class Runtime extends EventEmitter {
      * Used by the UI to indicate running status.
      * @const {string}
      */
-    static get PROJECT_RUN_START() {
+    static get PROJECT_RUN_START () {
         return 'PROJECT_RUN_START';
     }
 
@@ -769,7 +792,7 @@ class Runtime extends EventEmitter {
      * Used by the UI to indicate not-running status.
      * @const {string}
      */
-    static get PROJECT_RUN_STOP() {
+    static get PROJECT_RUN_STOP () {
         return 'PROJECT_RUN_STOP';
     }
 
@@ -778,7 +801,7 @@ class Runtime extends EventEmitter {
      * Used by blocks that need to reset state.
      * @const {string}
      */
-    static get PROJECT_STOP_ALL() {
+    static get PROJECT_STOP_ALL () {
         return 'PROJECT_STOP_ALL';
     }
 
@@ -787,7 +810,7 @@ class Runtime extends EventEmitter {
      * Used by blocks that need to stop individual targets.
      * @const {string}
      */
-    static get STOP_FOR_TARGET() {
+    static get STOP_FOR_TARGET () {
         return 'STOP_FOR_TARGET';
     }
 
@@ -795,7 +818,7 @@ class Runtime extends EventEmitter {
      * Event name for visual value report.
      * @const {string}
      */
-    static get VISUAL_REPORT() {
+    static get VISUAL_REPORT () {
         return 'VISUAL_REPORT';
     }
 
@@ -803,7 +826,7 @@ class Runtime extends EventEmitter {
      * Event name for project loaded report.
      * @const {string}
      */
-    static get PROJECT_LOADED() {
+    static get PROJECT_LOADED () {
         return 'PROJECT_LOADED';
     }
 
@@ -811,7 +834,7 @@ class Runtime extends EventEmitter {
      * Event name for report that a change was made that can be saved
      * @const {string}
      */
-    static get PROJECT_CHANGED() {
+    static get PROJECT_CHANGED () {
         return 'PROJECT_CHANGED';
     }
 
@@ -819,7 +842,7 @@ class Runtime extends EventEmitter {
      * Event name for report that a change was made to an extension in the toolbox.
      * @const {string}
      */
-    static get TOOLBOX_EXTENSIONS_NEED_UPDATE() {
+    static get TOOLBOX_EXTENSIONS_NEED_UPDATE () {
         return 'TOOLBOX_EXTENSIONS_NEED_UPDATE';
     }
 
@@ -827,7 +850,7 @@ class Runtime extends EventEmitter {
      * Event name for targets update report.
      * @const {string}
      */
-    static get TARGETS_UPDATE() {
+    static get TARGETS_UPDATE () {
         return 'TARGETS_UPDATE';
     }
 
@@ -835,7 +858,7 @@ class Runtime extends EventEmitter {
      * Event name for monitors update.
      * @const {string}
      */
-    static get MONITORS_UPDATE() {
+    static get MONITORS_UPDATE () {
         return 'MONITORS_UPDATE';
     }
 
@@ -843,7 +866,7 @@ class Runtime extends EventEmitter {
      * Event name for block drag update.
      * @const {string}
      */
-    static get BLOCK_DRAG_UPDATE() {
+    static get BLOCK_DRAG_UPDATE () {
         return 'BLOCK_DRAG_UPDATE';
     }
 
@@ -851,7 +874,7 @@ class Runtime extends EventEmitter {
      * Event name for block drag end.
      * @const {string}
      */
-    static get BLOCK_DRAG_END() {
+    static get BLOCK_DRAG_END () {
         return 'BLOCK_DRAG_END';
     }
 
@@ -859,7 +882,7 @@ class Runtime extends EventEmitter {
      * Event name for reporting that an extension was added.
      * @const {string}
      */
-    static get EXTENSION_ADDED() {
+    static get EXTENSION_ADDED () {
         return 'EXTENSION_ADDED';
     }
 
@@ -867,7 +890,7 @@ class Runtime extends EventEmitter {
      * Event name for reporting that an extension as asked for a custom field to be added
      * @const {string}
      */
-    static get EXTENSION_FIELD_ADDED() {
+    static get EXTENSION_FIELD_ADDED () {
         return 'EXTENSION_FIELD_ADDED';
     }
 
@@ -877,7 +900,7 @@ class Runtime extends EventEmitter {
      * available peripherals.
      * @const {string}
      */
-    static get PERIPHERAL_LIST_UPDATE() {
+    static get PERIPHERAL_LIST_UPDATE () {
         return 'PERIPHERAL_LIST_UPDATE';
     }
 
@@ -886,7 +909,7 @@ class Runtime extends EventEmitter {
      * via Companion Device Manager (CDM)
      * @const {string}
      */
-    static get USER_PICKED_PERIPHERAL() {
+    static get USER_PICKED_PERIPHERAL () {
         return 'USER_PICKED_PERIPHERAL';
     }
 
@@ -895,7 +918,7 @@ class Runtime extends EventEmitter {
      * This causes the status button in the blocks menu to indicate 'connected'.
      * @const {string}
      */
-    static get PERIPHERAL_CONNECTED() {
+    static get PERIPHERAL_CONNECTED () {
         return 'PERIPHERAL_CONNECTED';
     }
 
@@ -904,7 +927,7 @@ class Runtime extends EventEmitter {
      * This causes the status button in the blocks menu to indicate 'disconnected'.
      * @const {string}
      */
-    static get PERIPHERAL_DISCONNECTED() {
+    static get PERIPHERAL_DISCONNECTED () {
         return 'PERIPHERAL_DISCONNECTED';
     }
 
@@ -913,7 +936,7 @@ class Runtime extends EventEmitter {
      * This causes the peripheral connection modal to switch to an error state.
      * @const {string}
      */
-    static get PERIPHERAL_REQUEST_ERROR() {
+    static get PERIPHERAL_REQUEST_ERROR () {
         return 'PERIPHERAL_REQUEST_ERROR';
     }
 
@@ -922,7 +945,7 @@ class Runtime extends EventEmitter {
      * This causes a 'peripheral connection lost' error alert to display.
      * @const {string}
      */
-    static get PERIPHERAL_CONNECTION_LOST_ERROR() {
+    static get PERIPHERAL_CONNECTION_LOST_ERROR () {
         return 'PERIPHERAL_CONNECTION_LOST_ERROR';
     }
 
@@ -931,7 +954,7 @@ class Runtime extends EventEmitter {
      * This causes the peripheral connection modal to show a timeout state.
      * @const {string}
      */
-    static get PERIPHERAL_SCAN_TIMEOUT() {
+    static get PERIPHERAL_SCAN_TIMEOUT () {
         return 'PERIPHERAL_SCAN_TIMEOUT';
     }
 
@@ -939,7 +962,7 @@ class Runtime extends EventEmitter {
      * Event name to indicate that the microphone is being used to stream audio.
      * @const {string}
      */
-    static get MIC_LISTENING() {
+    static get MIC_LISTENING () {
         return 'MIC_LISTENING';
     }
 
@@ -947,7 +970,7 @@ class Runtime extends EventEmitter {
      * Event name for reporting that blocksInfo was updated.
      * @const {string}
      */
-    static get BLOCKSINFO_UPDATE() {
+    static get BLOCKSINFO_UPDATE () {
         return 'BLOCKSINFO_UPDATE';
     }
 
@@ -955,7 +978,7 @@ class Runtime extends EventEmitter {
      * Event name when the runtime tick loop has been started.
      * @const {string}
      */
-    static get RUNTIME_STARTED() {
+    static get RUNTIME_STARTED () {
         return 'RUNTIME_STARTED';
     }
 
@@ -963,7 +986,7 @@ class Runtime extends EventEmitter {
      * Event name when the runtime tick loop has been stopped.
      * @const {string}
      */
-    static get RUNTIME_STOPPED() {
+    static get RUNTIME_STOPPED () {
         return 'RUNTIME_STOPPED';
     }
 
@@ -971,7 +994,7 @@ class Runtime extends EventEmitter {
      * Event name when the runtime dispose has been called.
      * @const {string}
      */
-    static get RUNTIME_DISPOSED() {
+    static get RUNTIME_DISPOSED () {
         return 'RUNTIME_DISPOSED';
     }
 
@@ -979,14 +1002,21 @@ class Runtime extends EventEmitter {
      * Event name for reporting that a block was updated and needs to be rerendered.
      * @const {string}
      */
-    static get BLOCKS_NEED_UPDATE() {
+    static get BLOCKS_NEED_UPDATE () {
         return 'BLOCKS_NEED_UPDATE';
+    }
+
+    /**
+     * Event name when platform name inside a project does not match the runtime.
+     */
+    static get PLATFORM_MISMATCH () {
+        return 'PLATFORM_MISMATCH';
     }
 
     /**
      * How rapidly we try to step threads by default, in ms.
      */
-    static get THREAD_STEP_INTERVAL() {
+    static get THREAD_STEP_INTERVAL () {
         // tw: not used, only exists for compatibility
         return 1000 / 60;
     }
@@ -994,7 +1024,7 @@ class Runtime extends EventEmitter {
     /**
      * In compatibility mode, how rapidly we try to step threads, in ms.
      */
-    static get THREAD_STEP_INTERVAL_COMPATIBILITY() {
+    static get THREAD_STEP_INTERVAL_COMPATIBILITY () {
         // tw: not used, only exists for compatibility
         return 1000 / 30;
     }
@@ -1003,7 +1033,7 @@ class Runtime extends EventEmitter {
      * How many clones can be created at a time.
      * @const {number}
      */
-    static get MAX_CLONES() {
+    static get MAX_CLONES () {
         // tw: clone limit is set per-runtime in runtimeOptions, this is only the initial value
         return 300;
     }
@@ -2079,10 +2109,9 @@ class Runtime extends EventEmitter {
         this.targets.map(this.disposeTarget, this);
         this.extensionStorage = {};
         // tw: explicitly emit a MONITORS_UPDATE instead of relying on implicit behavior of _step()
-        const emptyMonitorState = OrderedMap({});
-        if (!emptyMonitorState.equals(this._monitorState)) {
-            this._monitorState = emptyMonitorState;
-            this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
+        if (!this._monitorState.empty()) {
+            this._monitorState = new MonitorState();
+            this.emit(Runtime.MONITORS_UPDATE, this._monitorState.shallowClone());
         }
         this.emit(Runtime.RUNTIME_DISPOSED);
         this.ioDevices.clock.resetProjectTimer();
@@ -2366,9 +2395,9 @@ class Runtime extends EventEmitter {
             this._refreshTargets = false;
         }
 
-        if (!this._prevMonitorState.equals(this._monitorState)) {
-            this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
-            this._prevMonitorState = this._monitorState;
+        if (this._monitorState.dirty) {
+            this.emit(Runtime.MONITORS_UPDATE, this._monitorState.shallowClone());
+            this._monitorState.dirty = false;
         }
 
         if (this.profiler !== null) {
@@ -2492,12 +2521,13 @@ class Runtime extends EventEmitter {
                 const offsetX = deltaX / 2;
                 const offsetY = deltaY / 2;
                 for (const monitor of this._monitorState.valueSeq()) {
-                    const newMonitor = monitor
-                        .set('x', monitor.get('x') + offsetX)
-                        .set('y', monitor.get('y') + offsetY);
-                    this.requestUpdateMonitor(newMonitor);
+                    this.requestUpdateMonitor({
+                        id: monitor.id,
+                        x: monitor.get('x') + offsetX,
+                        y: monitor.get('y') + offsetY
+                    });
                 }
-                this.emit(Runtime.MONITORS_UPDATE, this._monitorState);
+                this.emit(Runtime.MONITORS_UPDATE, this._monitorState.shallowClone());
             }
 
             this.stageWidth = width;
@@ -2866,10 +2896,9 @@ class Runtime extends EventEmitter {
      * @param {!MonitorRecord} monitor Monitor to add.
      */
     requestAddMonitor(monitor) {
-        const id = monitor.get('id');
         if (!this.requestUpdateMonitor(monitor)) { // update monitor if it exists in the state
             // if the monitor did not exist in the state, add it
-            this._monitorState = this._monitorState.set(id, monitor);
+            this._monitorState.set(monitor.id, monitor);
         }
     }
 
@@ -2880,17 +2909,11 @@ class Runtime extends EventEmitter {
      *     the old monitor will keep its old value.
      * @return {boolean} true if monitor exists in the state and was updated, false if it did not exist.
      */
-    requestUpdateMonitor(monitor) {
-        const id = monitor.get('id');
+    requestUpdateMonitor (delta) {
+        delta = MonitorRecord.externalDeltaToJS(delta);
+        const id = delta.id;
         if (this._monitorState.has(id)) {
-            this._monitorState =
-                // Use mergeWith here to prevent undefined values from overwriting existing ones
-                this._monitorState.set(id, this._monitorState.get(id).mergeWith((prev, next) => {
-                        if (typeof next === 'undefined' || next === null) {
-                            return prev;
-                        }
-                        return next;
-                    }, monitor));
+            this._monitorState.set(id, delta);
             return true;
         }
         return false;
@@ -3103,11 +3126,11 @@ class Runtime extends EventEmitter {
      * @param {string} optVarType The type of the variable to create. Defaults to Variable.SCALAR_TYPE.
      * @return {Variable} The new variable that was created.
      */
-    createNewGlobalVariable(variableName, optVarId, optVarType) {
+    createNewGlobalVariable (variableName, optVarId, optVarType) {
         const varType = (typeof optVarType === 'string') ? optVarType : Variable.SCALAR_TYPE;
         const allVariableNames = this.getAllVarNamesOfType(varType);
         const newName = StringUtil.unusedName(variableName, allVariableNames);
-        const variable = new Variable(optVarId || uid(), newName, varType);
+        const variable = Variable.create(optVarId || uid(), newName, varType);
         const stage = this.getTargetForStage();
         stage.variables[variable.id] = variable;
         return variable;
@@ -3221,24 +3244,26 @@ class Runtime extends EventEmitter {
     /**
      * Wrap an asset loading promise with progress support.
      * @template T
-     * @param {Promise<T>} promise
+     * @param {() => Promise<T>} callback
      * @returns {Promise<T>}
      */
-    wrapAssetRequest(promise) {
+    wrapAssetRequest (callback) {
         this.totalAssetRequests++;
         this.emitAssetProgress();
 
-        return promise
-        .then(result => {
+        const onSuccess = result => {
             this.finishedAssetRequests++;
             this.emitAssetProgress();
             return result;
-        })
-        .catch(error => {
+        };
+
+        const onError = error => {
             this.finishedAssetRequests++;
             this.emitAssetProgress();
             throw error;
-        });
+        };
+
+        return callback().then(onSuccess, onError);
     }
 }
 

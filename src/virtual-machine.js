@@ -90,6 +90,7 @@ class VirtualMachine extends EventEmitter {
         this._dragTarget = null;
 
         // Runtime emits are passed along as VM emits.
+        // Runtime emits are passed along as VM emits.
         this.runtime.on(Runtime.SCRIPT_GLOW_ON, glowData => {
             this.emit(Runtime.SCRIPT_GLOW_ON, glowData);
         });
@@ -194,6 +195,15 @@ class VirtualMachine extends EventEmitter {
         });
         this.runtime.on(Runtime.COMPILE_ERROR, (target, error) => {
             this.emit(Runtime.COMPILE_ERROR, target, error);
+        });
+        this.runtime.on(Runtime.ASSET_PROGRESS, (finished, total) => {
+            this.emit(Runtime.ASSET_PROGRESS, finished, total);
+        });
+        this.runtime.on(Runtime.TURBO_MODE_OFF, () => {
+            this.emit(Runtime.TURBO_MODE_OFF);
+        });
+        this.runtime.on(Runtime.TURBO_MODE_ON, () => {
+            this.emit(Runtime.TURBO_MODE_ON);
         });
 
         this.extensionManager = new ExtensionManager(this.runtime);
@@ -530,9 +540,10 @@ class VirtualMachine extends EventEmitter {
         });
     }
 
+    /**
+     * @returns {JSZip} JSZip zip object representing the sb3.
+     */
     _saveProjectZip () {
-        const soundDescs = serializeSounds(this.runtime);
-        const costumeDescs = serializeCostumes(this.runtime);
         const projectJson = this.toJSON();
 
         // TODO want to eventually move zip creation out of here, and perhaps
@@ -541,7 +552,32 @@ class VirtualMachine extends EventEmitter {
 
         // Put everything in a zip file
         zip.file('project.json', projectJson);
-        this._addFileDescsToZip(soundDescs.concat(costumeDescs), zip);
+        this._addFileDescsToZip(this.serializeAssets(), zip);
+
+        // Use a fixed modification date for the files in the zip instead of letting JSZip use the
+        // current time to avoid a very small metadata leak and make zipping deterministic. The magic
+        // number is from the first TurboWarp/scratch-vm commit after forking
+        // (4a93dab4fa3704ab7a1374b9794026b3330f3433).
+        const date = new Date(1591657163000);
+        for (const file of Object.values(zip.files)) {
+            file.date = date;
+        }
+
+        // Tell JSZip to only compress file formats where there will be a significant gain.
+        const COMPRESSABLE_FORMATS = [
+            '.json',
+            '.svg',
+            '.wav',
+            '.ttf',
+            '.otf'
+        ];
+        for (const file of Object.values(zip.files)) {
+            if (COMPRESSABLE_FORMATS.some(ext => file.name.endsWith(ext))) {
+                file.options.compression = 'DEFLATE';
+            } else {
+                file.options.compression = 'STORE';
+            }
+        }
 
         return zip;
     }
@@ -558,26 +594,24 @@ class VirtualMachine extends EventEmitter {
     }
 
     saveProjectSb3Stream (type) {
-            return this._saveProjectZip().generateInternalStream({
-                type: type || 'arraybuffer',
-                mimeType: 'application/x.scratch.sb3',
-                compression: 'DEFLATE'
-            });
-        }
+        return this._saveProjectZip().generateInternalStream({
+            type: type || 'arraybuffer',
+            mimeType: 'application/x.scratch.sb3',
+            compression: 'DEFLATE'
+        });
+    }
 
     /**
      * tw: Serailize the project into a map of files without actually zipping the project.
      * @returns {Record<Uint8Array>} Files of the project.
      */
     saveProjectSb3DontZip () {
-        const soundDescs = serializeSounds(this.runtime);
-        const costumeDescs = serializeCostumes(this.runtime);
         const projectJson = this.toJSON();
 
         const files = {
             'project.json': new _TextEncoder().encode(projectJson)
         };
-        for (const fileDesc of soundDescs.concat(costumeDescs)) {
+        for (const fileDesc of this.serializeAssets()) {
             files[fileDesc.fileName] = fileDesc.fileContent;
         }
 
@@ -588,11 +622,34 @@ class VirtualMachine extends EventEmitter {
      * @type {Array<object>} Array of all costumes and sounds currently in the runtime
      */
     get assets () {
-        return this.runtime.targets.reduce((acc, target) => (
+        const costumesAndSounds = this.runtime.targets.reduce((acc, target) => (
             acc
                 .concat(target.sprite.sounds.map(sound => sound.asset))
                 .concat(target.sprite.costumes.map(costume => costume.asset))
         ), []);
+        const fonts = this.runtime.fontManager.serializeAssets();
+        return [
+            ...costumesAndSounds,
+            ...fonts
+        ];
+    }
+
+    /**
+     * @param {string} targetId Optional ID of target to export
+     * @returns {Array<{fileName: string; fileContent: Uint8Array;}} list of file descs
+     */
+    serializeAssets (targetId) {
+        const costumeDescs = serializeCostumes(this.runtime, targetId);
+        const soundDescs = serializeSounds(this.runtime, targetId);
+        const fontDescs = this.runtime.fontManager.serializeAssets().map(asset => ({
+            fileName: `${asset.assetId}.${asset.dataFormat}`,
+            fileContent: asset.data
+        }));
+        return [
+            ...costumeDescs,
+            ...soundDescs,
+            ...fontDescs
+        ];
     }
 
     _addFileDescsToZip (fileDescs, zip) {
@@ -615,13 +672,11 @@ class VirtualMachine extends EventEmitter {
      * specified by optZipType or blob by default.
      */
     exportSprite (targetId, optZipType) {
-        const soundDescs = serializeSounds(this.runtime, targetId);
-        const costumeDescs = serializeCostumes(this.runtime, targetId);
         const spriteJson = this.toJSON(targetId);
 
         const zip = new JSZip();
         zip.file('sprite.json', spriteJson);
-        this._addFileDescsToZip(soundDescs.concat(costumeDescs), zip);
+        this._addFileDescsToZip(this.serializeAssets(targetId), zip);
 
         return zip.generateAsync({
             type: typeof optZipType === 'string' ? optZipType : 'blob',
@@ -1756,6 +1811,10 @@ class VirtualMachine extends EventEmitter {
      */
     configureScratchLinkSocketFactory (factory) {
         this.runtime.configureScratchLinkSocketFactory(factory);
+    }
+
+    clearFlyoutBlocks () {
+        this.runtime.flyoutBlocks.deleteAllBlocks();
     }
 }
 
