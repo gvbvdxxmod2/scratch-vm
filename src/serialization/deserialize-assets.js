@@ -1,4 +1,4 @@
-const JSZip = require('@turbowarp/jszip');
+const JSZip = require('@gvbvdxxmod2/jszip');
 const log = require('../util/log');
 
 /**

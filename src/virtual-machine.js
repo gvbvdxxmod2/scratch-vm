@@ -569,7 +569,8 @@ class VirtualMachine extends EventEmitter {
             '.svg',
             '.wav',
             '.ttf',
-            '.otf'
+            '.otf',
+            '.js'
         ];
         for (const file of Object.values(zip.files)) {
             if (COMPRESSABLE_FORMATS.some(ext => file.name.endsWith(ext))) {
@@ -762,7 +763,7 @@ class VirtualMachine extends EventEmitter {
 
         extensions.extensionIDs.forEach(extensionID => {
             if (!this.extensionManager.isExtensionLoaded(extensionID)) {
-                const extensionURL = extensions.extensionURLs.get(extensionID) || extensionID;
+                var extensionURL = extensions.extensionURLs.get(extensionID) || extensionID;
                 extensionPromises.push(this.extensionManager.loadExtensionURL(extensionURL));
             }
         });

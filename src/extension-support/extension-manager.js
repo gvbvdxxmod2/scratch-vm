@@ -1,4 +1,4 @@
-const gm2TurbowarpxtensionSupport = require("./tw-extensions/");
+//const gm2TurbowarpxtensionSupport = require("./tw-extensions/");
 const dispatch = require('../dispatch/central-dispatch');
 const log = require('../util/log');
 const maybeFormatMessage = require('../util/maybe-format-message');
@@ -11,7 +11,7 @@ const BlockType = require('./block-type');
 // These extensions are currently built into the VM repository but should not be loaded at startup.
 // TODO: move these out into a separate repository?
 // TODO: change extension spec so that library info, including extension ID, can be collected through static methods
-
+/*
 const builtinExtensions = {
     // This is an example that isn't loaded with the other core blocks,
     // but serves as a reference for loading core blocks as extensions.
@@ -48,7 +48,9 @@ const builtinExtensions = {
 	//nesemulator: () => require('../extensions/nesemulator'),
 	//sndanalyser: () => require('../extensions/gm2_projectsound'),
 	//spritecanvas: () => require('../extensions/spritecanvas')
-};
+};*/
+
+var ExtensionList = require("./extensions.js");
 
 //INIT Tw extensions
 /*
@@ -176,37 +178,36 @@ class ExtensionManager {
 
         this.securityManager = new SecurityManager();
 
+        this.extensionList = ExtensionList;
+
+        this.loadedExtensionURLs = {};
+
         dispatch.setService('extensions', createExtensionService(this)).catch(e => {
             log.error(`ExtensionManager was unable to register extension service: ${JSON.stringify(e)}`);
         });
     }
 	
-	//GM2: add support for newer turbowarp extensions. (async function)
-	
-	async addTWExtensionURL (url) {
-		var request = await fetch(url);
-		var jsString = await request.text();
-		gm2TurbowarpxtensionSupport.runExtensionSync(jsString);
-	}
-	
-	//GM2: also allow support for direct javascript text
-	
-	addTWExtensionJS (plain) {
-		gm2TurbowarpxtensionSupport.runExtensionSync(plain);
-	}
-	
 	//GM2: add support for Scratch.extensions.register().
 	
-	GM2RegisterExtension (extensionInstance) {
+	_registerTWAPIExtension (extensionInstance, scratchObj) {
 		var info = extensionInstance.getInfo();
 		if (this.isExtensionLoaded(info.id)) {
 			log.warn("GM2 - extension tried to create a second extension with the same ID, not registering this extension.");
 			return;
 		}
 		const serviceName = this._registerInternalExtension(extensionInstance);
-		var extensionURL = info.id;
+		
+        var extensionURL = info.id;
 		this._loadedExtensions.set(extensionURL, serviceName);
         this.runtime.compilerRegisterExtension(extensionURL, extensionInstance);
+        if (scratchObj) {
+            //Syncronusly get it first, just as a placeholder though.
+            this.loadedExtensionURLs[extensionURL] = `data:application/javascript,${window.encodeURIComponent(scratchObj.extensionCode)}`;
+            //Then actually provide the base64 version after.
+            (async () => {
+                this.loadedExtensionURLs[extensionURL] = await scratchObj.getExtensionAsDataURL();
+            })();
+        }
 	}
     /**
      * Check whether an extension is registered or is in the process of loading. This is intended to control loading or
@@ -220,13 +221,13 @@ class ExtensionManager {
     }
 
     /**
-     * Synchronously load an internal extension (core or non-core) by ID. This call will
-     * fail if the provided id is not does not match an internal extension.
+     * Syncronusly loads an extension from the provided ID.
+     * Ignores any async extensions.
      * @param {string} extensionId - the ID of an internal extension
      */
     loadExtensionIdSync (extensionId) {
-        if (!builtinExtensions.hasOwnProperty(extensionId)) {
-            log.warn(`Could not find extension ${extensionId} in the built in extensions.`);
+        if (!this.extensionList.hasExtension(extensionId)) {
+            log.warn(`Could not find extension ${extensionId} in the extension list.`);
             return;
         }
 
@@ -237,14 +238,81 @@ class ExtensionManager {
             return;
         }
 
-        const extension = builtinExtensions[extensionId]();
-		if (extension) {
-			const extensionInstance = new extension(this.runtime);
-			const serviceName = this._registerInternalExtension(extensionInstance);
-			this._loadedExtensions.set(extensionId, serviceName);
-			this.runtime.compilerRegisterExtension(extensionId, extensionInstance);
-		}
+        var extension = this.extensionList.getExtension(extensionId);
+		if (!extension) {
+            return;
+        }
+
+        var importedExtension = extension.doSyncImport();
+        if (!importedExtension) {
+            log.warn("Attempted to import extension syncronusly that may be async: "+extensionId);
+            return;
+        }
         
+        var extensionInstance = new importedExtension(this.runtime);
+		var serviceName = this._registerInternalExtension(extensionInstance);
+		this._loadedExtensions.set(extensionId, serviceName);
+		this.runtime.compilerRegisterExtension(extensionId, extensionInstance);
+        
+    }
+
+    /**
+     * Asyncronusly loads an extension from the provided ID.
+     * Syncronus extensions can be loaded from this as well.
+     * @param {string} extensionId - the ID of an internal extension
+     */
+    async loadExtensionIdAsync (extensionId) {
+        if (!this.extensionList.hasExtension(extensionId)) {
+            log.warn(`Could not find extension ${extensionId} in the extension list.`);
+            return;
+        }
+
+        /** @TODO dupe handling for non-builtin extensions. See commit 670e51d33580e8a2e852b3b038bb3afc282f81b9 */
+        if (this.isExtensionLoaded(extensionId)) {
+            const message = `Rejecting attempt to load a second extension with ID ${extensionId}`;
+            log.warn(message);
+            return;
+        }
+
+        var extension = this.extensionList.getExtension(extensionId);
+		if (!extension) {
+            return;
+        }
+
+        var twApi = extension.usesTwAPI();
+        var importedExtensionModule = await extension.doAsyncImport();
+        if (!importedExtensionModule) {
+            return;
+        }
+        
+        var importedExtension = importedExtensionModule.default || importedExtensionModule;
+
+        if (twApi) {
+            var extensionRunner = this.extensionRunner;
+            extensionRunner.runExtensionFromJSSync(importedExtension);
+            return;
+        }
+        
+        var extensionInstance = new importedExtension(this.runtime);
+		var serviceName = this._registerInternalExtension(extensionInstance);
+		this._loadedExtensions.set(extensionId, serviceName);
+		this.runtime.compilerRegisterExtension(extensionId, extensionInstance);
+    }
+
+    /**
+     * Asyncronusly loads an extension from the provided JavaScript file source.
+     * @param {any} extensionData - Either a Blob of the extension JavaScript or URL to it.
+     */
+    async _loadApiExtensionAsync(extensionData) {
+        var extensionRunner = this.extensionRunner;
+
+        if (typeof extensionData == "string") {
+            return await extensionRunner.runExtensionURL(extensionData);
+        }
+
+        if (extensionData instanceof Blob) {
+            return await extensionRunner.runExtensionBlob(extensionData);
+        }
     }
 
     /**
@@ -252,36 +320,21 @@ class ExtensionManager {
      * @param {string} extensionURL - the URL for the extension to load OR the ID of an internal extension
      * @returns {Promise} resolved once the extension is loaded and initialized or rejected on failure
      */
-	
-	 
-    loadExtensionURL (extensionURL) {
-        if (builtinExtensions.hasOwnProperty(extensionURL)) {
-            /** @TODO dupe handling for non-builtin extensions. See commit 670e51d33580e8a2e852b3b038bb3afc282f81b9 */
-            if (this.isExtensionLoaded(extensionURL)) {
-                const message = `Rejecting attempt to load a second extension with ID ${extensionURL}`;
-                log.warn(message);
-                return Promise.resolve();
-            }
 
-            const extension = builtinExtensions[extensionURL]();
-            if (extension) {
-				const extensionInstance = new extension(this.runtime);
-				const serviceName = this._registerInternalExtension(extensionInstance);
-				this._loadedExtensions.set(extensionURL, serviceName);
-				this.runtime.compilerRegisterExtension(extensionURL, extensionInstance);
-			}
-            return Promise.resolve();
+    async loadExtensionURL (extIDOrURL) {
+        if (this.extensionList.hasExtension(extIDOrURL)) {
+            return await this.loadExtensionIdAsync(extIDOrURL);
         }
 
-        this.loadingAsyncExtensions++;
+        //We use the ones we have pre-fetched from the TurboWarp extension library.
+        //TurboWarp is starting to get blocked on many school devices.
+        //GM2 may not be blocked, and already providing the extension gallery will fix these issues.
+        var twLibExtensionID = this.extensionList.findTWExtension(extIDOrURL);
+        if (twLibExtensionID) {
+            return await this.loadExtensionIdAsync(twLibExtensionID);
+        }
 
-        return new Promise((resolve, reject) => {
-            this.pendingExtensions.push({extensionURL, resolve, reject});
-            /*this.createExtensionWorker()
-                .then(worker => dispatch.addWorker(worker))
-                .catch(error => reject(error));*/
-                reject("Unsupported for now");
-        });
+        return await this._loadApiExtensionAsync(extIDOrURL);
     }
 
     /**
@@ -617,7 +670,6 @@ class ExtensionManager {
 	
 	
 	getExtensionURLs () {
-        const extensionURLs = {};
         /*for (const [extensionId, serviceName] of this._loadedExtensions.entries()) {
             if (Object.prototype.hasOwnProperty.call(this.builtinExtensions, extensionId)) {
                 continue;
@@ -630,7 +682,7 @@ class ExtensionManager {
                 extensionURLs[extensionId] = extensionURL;
             }
         }*/
-        return extensionURLs;
+        return this.loadedExtensionURLs;
     }
 
     isExtensionURLLoaded (url) {

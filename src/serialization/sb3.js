@@ -1490,7 +1490,7 @@ const replaceUnsafeCharsInVariableIds = function (targets) {
  * @returns {void|Promise<void>} Resolves when the user has acknowledged any compatibilities, if any exist.
  */
 const checkPlatformCompatibility = (json, runtime) => {
-    if (!json.meta || !json.meta.platform) {
+    if (!json.meta || !json.meta.platform || !json.meta.platform.name) {
         return;
     }
 

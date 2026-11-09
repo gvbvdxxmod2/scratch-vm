@@ -8,7 +8,7 @@ var extensionMetadataURL = "https://extensions.turbowarp.org/generated-metadata/
 var extensionDownloadURL = "https://extensions.turbowarp.org/";
 var extensionsPath = "./turbowarp-extensions/";
 var guiPath = "../../scratch-gui"; //Assuming that your running this in the src folder.
-var guiExtensionsPath = path.join(guiPath,"src/lib/libraries/extensions/");
+var guiExtaensionsPath = path.join(guiPath,"src/lib/libraries/extensions/");
 var guiExtensionsFile = path.join(guiExtensionsPath,"tw-extensions.json");
 var guiExtensionsImages = path.join(guiExtensionsPath,"/tw-extensions/");
 

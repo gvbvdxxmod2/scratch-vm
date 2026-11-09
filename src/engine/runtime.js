@@ -23,6 +23,8 @@ const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
 const ExtendedJSON = require('../util/tw-extended-json');
 const FontManager = require('./tw-font-manager');
 const MonitorState = require('./tw-monitor-state.js');
+const MonitorRecord = require('./monitor-record.js');
+const platform = require('./tw-platform.js');
 
 // Virtual I/O devices.
 const Clock = require('../io/clock');
@@ -2958,8 +2960,8 @@ class Runtime extends EventEmitter {
      * the monitor already does not exist in the state.
      * @param {!string} targetId Remove all monitors with given target ID.
      */
-    requestRemoveMonitorByTargetId(targetId) {
-        this._monitorState = this._monitorState.filterNot(value => value.targetId === targetId);
+    requestRemoveMonitorByTargetId (targetId) {
+        this._monitorState.filter(value => value.targetId !== targetId);
     }
 
     /**

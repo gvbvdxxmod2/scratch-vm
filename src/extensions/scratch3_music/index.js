@@ -88,6 +88,8 @@ class Scratch3MusicBlocks {
 
         this._playNoteForPicker = this._playNoteForPicker.bind(this);
         this.runtime.on('PLAY_NOTE', this._playNoteForPicker);
+
+        this.showGM2Blocks = false;
     }
 
     /**
@@ -1070,7 +1072,18 @@ class Scratch3MusicBlocks {
                     blockType: BlockType.REPORTER
                 },
                 {
+                    func: "enableGM2Blocks",
+                    blockType: Scratch.BlockType.BUTTON,
+                    text: formatMessage({
+                        id: 'gm2.music.enablegm2',
+                        default: 'Enable Gvbvdxx Mod 2 blocks',
+                        description: 'Button label to enable Gvbvdxx Mod 2 blocks for the Music Extension'
+                    }),
+                    hideFromPalette: this.showGM2Blocks,
+                },
+                {
                     opcode: 'getInstrument',
+                    hideFromPallete: !this.showGM2Blocks,
                     text: formatMessage({
                         id: 'music.getInstrument',
                         default: 'instrument',
@@ -1080,6 +1093,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'getMidiMaping',
+                    hideFromPallete: !this.showGM2Blocks,
                     text: formatMessage({
                         id: 'music.getMidiInstrument',
                         default: 'get midi instrument map of [midiNum]',
@@ -1095,6 +1109,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'getMidiMapingDrums',
+                    hideFromPallete: !this.showGM2Blocks,
                     text: formatMessage({
                         id: 'music.getMidiInstrumentDrums',
                         default: 'get midi drum map of [midiNum]',
@@ -1121,6 +1136,18 @@ class Scratch3MusicBlocks {
             }
         };
     }
+    enableGM2Blocks () {
+        const popup = formatMessage({
+            id: 'gm2.music.enablegm2confirm',
+            default: 'This will enable blocks & features THAT ARE NOT COMPATIBLE with Scratch, continue?',
+            description: 'Confirmation for when trying to enable GM2 music blocks.'
+        });
+      if (confirm(popup)) {
+        compatibilityMode = false;
+        this.runtime.vm.extensionManager.refreshBlocks();
+      }
+    }
+
 	getMidiMapingDrums (args) {
         let drumNum = Cast.toNumber(args.midiNum);
         drumNum = Math.round(drumNum);
