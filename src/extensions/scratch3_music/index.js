@@ -38,6 +38,8 @@ const menuIconURI = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iM
  */
 class Scratch3MusicBlocks {
     constructor (runtime) {
+        this.showGM2Blocks = false;
+        
         /**
          * The runtime instantiating this block package.
          * @type {Runtime}
@@ -88,8 +90,6 @@ class Scratch3MusicBlocks {
 
         this._playNoteForPicker = this._playNoteForPicker.bind(this);
         this.runtime.on('PLAY_NOTE', this._playNoteForPicker);
-
-        this.showGM2Blocks = false;
     }
 
     /**
@@ -123,17 +123,17 @@ class Scratch3MusicBlocks {
      * @param {array} playerArray - the array of players in which to store it.
      * @return {Promise} - a promise which will resolve once the sound has been stored.
      */
-    _storeSound (filePath, index, playerArray) {
+    async _storeSound (filePath, index, playerArray) {
         const fullPath = `${filePath}.mp3`;
 
         if (!assetData[fullPath]) return;
 
-        // The sound player has already been downloaded via the manifest file required above.
-        const soundBuffer = assetData[fullPath];
+        var soundImportFunc = assetData[fullPath];
 
-        return this._decodeSound(soundBuffer).then(player => {
-            playerArray[index] = player;
-        });
+        var bufferImported = await soundImportFunc();
+        var bufferContent = bufferImported.default || bufferImported;
+        var player = await this._decodeSound(bufferContent);
+        playerArray[index] = player;
     }
 
     /**
@@ -915,6 +915,7 @@ class Scratch3MusicBlocks {
      * @returns {object} metadata for this extension and its blocks.
      */
     getInfo () {
+        var showGM2Blocks = this.showGM2Blocks;
         return {
             id: 'music',
             name: formatMessage({
@@ -927,6 +928,7 @@ class Scratch3MusicBlocks {
             blocks: [
                 {
                     opcode: 'playDrumForBeats',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.playDrumForBeats',
@@ -968,6 +970,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'restForBeats',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.restForBeats',
@@ -983,6 +986,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'playNoteForBeats',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.playNoteForBeats',
@@ -1002,6 +1006,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'setInstrument',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.setInstrument',
@@ -1034,6 +1039,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'setTempo',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.setTempo',
@@ -1049,6 +1055,7 @@ class Scratch3MusicBlocks {
                 },
                 {
                     opcode: 'changeTempo',
+                    hideFromPallete: false,
                     blockType: BlockType.COMMAND,
                     text: formatMessage({
                         id: 'music.changeTempo',
@@ -1069,31 +1076,37 @@ class Scratch3MusicBlocks {
                         default: 'tempo',
                         description: 'get the current tempo (speed) for notes, drums, and rests played'
                     }),
-                    blockType: BlockType.REPORTER
+                    blockType: BlockType.REPORTER,
+                    hideFromPallete: false,
                 },
                 {
                     func: "enableGM2Blocks",
-                    blockType: Scratch.BlockType.BUTTON,
+                    blockType: BlockType.BUTTON,
                     text: formatMessage({
                         id: 'gm2.music.enablegm2',
                         default: 'Enable Gvbvdxx Mod 2 blocks',
                         description: 'Button label to enable Gvbvdxx Mod 2 blocks for the Music Extension'
                     }),
-                    hideFromPalette: this.showGM2Blocks,
+                    hideBlock: !!showGM2Blocks,
+                },
+                {
+                    blockType: BlockType.LABEL,
+                    text: "Incompatible with Scratch:",
+                    hideBlock: !showGM2Blocks,
                 },
                 {
                     opcode: 'getInstrument',
-                    hideFromPallete: !this.showGM2Blocks,
+                    hideBlock: !!(!showGM2Blocks),
                     text: formatMessage({
                         id: 'music.getInstrument',
                         default: 'instrument',
                         description: 'get the current instrument'
                     }),
-                    blockType: BlockType.REPORTER
+                    blockType: BlockType.REPORTER,
                 },
                 {
                     opcode: 'getMidiMaping',
-                    hideFromPallete: !this.showGM2Blocks,
+                    hideBlock: !!(!showGM2Blocks),
                     text: formatMessage({
                         id: 'music.getMidiInstrument',
                         default: 'get midi instrument map of [midiNum]',
@@ -1105,11 +1118,11 @@ class Scratch3MusicBlocks {
 							type: ArgumentType.NUMBER,
 							defaultValue: 1
 						}
-					}
+					},
                 },
                 {
                     opcode: 'getMidiMapingDrums',
-                    hideFromPallete: !this.showGM2Blocks,
+                    hideBlock: !!(!showGM2Blocks),
                     text: formatMessage({
                         id: 'music.getMidiInstrumentDrums',
                         default: 'get midi drum map of [midiNum]',
@@ -1143,7 +1156,7 @@ class Scratch3MusicBlocks {
             description: 'Confirmation for when trying to enable GM2 music blocks.'
         });
       if (confirm(popup)) {
-        compatibilityMode = false;
+        this.showGM2Blocks = true;
         this.runtime.vm.extensionManager.refreshBlocks();
       }
     }

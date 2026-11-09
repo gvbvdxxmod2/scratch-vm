@@ -1710,7 +1710,15 @@ class Runtime extends EventEmitter {
                             target.isStage ? TargetType.STAGE : TargetType.SPRITE);
                 }
                 // If the block info's `hideFromPalette` is true, then filter out this block
-                return blockFilterIncludesTarget && !block.info.hideFromPalette;
+                
+                if (block.info.hideFromPalette) {
+                    return false;
+                }
+                if (block.info.hideBlock) {
+                    return false;
+                }
+
+                return blockFilterIncludesTarget;
             });
 
             const colorXML = `colour="${color1}" secondaryColour="${color2}"`;
