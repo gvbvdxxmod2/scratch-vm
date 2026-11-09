@@ -17,6 +17,7 @@ const MathUtil = require('./util/math-util');
 const Runtime = require('./engine/runtime');
 const StringUtil = require('./util/string-util');
 const formatMessage = require('format-message');
+const {exportCostume} = require('./serialization/tw-costume-import-export');
 
 const Variable = require('./engine/variable');
 const newBlockIds = require('./util/new-block-ids');
@@ -1804,6 +1805,15 @@ class VirtualMachine extends EventEmitter {
             }
         }
         return null;
+    }
+
+    /**
+     * TW: Get the raw binary data to use when exporting a costume to the user's local file system.
+     * @param {Costume} costumeObject scratch-vm costume object
+     * @returns {Uint8Array}
+     */
+    getExportedCostume (costumeObject) {
+        return exportCostume(costumeObject);
     }
 
     /**
