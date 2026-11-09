@@ -52,7 +52,7 @@
     "scratch-blocks": "git+https://github.com/gvbvdxxmod2/scratch-blocks.git",
     "scratch-paint": "git+https://github.com/gvbvdxxmod2/scratch-paint.git",
     "scratch-parser": "git+https://github.com/TurboWarp/scratch-parser.git",
-    "scratch-render-fonts": "git+https://github.com/gvbmod/scratch-render-fonts.git",
+    "scratch-render-fonts": "git+https://github.com/gvbvdxxmod2/scratch-render-fonts.git",
     "scratch-sb1-converter": "0.2.7",
     "scratch-storage": "git+https://github.com/gvbvdxxmod2/scratch-storage.git",
     "scratch-svg-renderer": "git+https://github.com/gvbmod/scratch-svg-renderer.git",
