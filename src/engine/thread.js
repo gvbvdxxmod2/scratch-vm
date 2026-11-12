@@ -207,14 +207,20 @@ class Thread {
         this.timer = null;
         /**
          * The thread's generator.
-         * @type {Generator}
+         * @type {?Generator}
          */
         this.generator = null;
+        /**
+         * The entry point of a compiled thread which does not yield.
+         * @type {?Function}
+         */
+        this.compiledFunction = null;
         /**
          * @type {Object.<string, import('../compiler/compile').CompiledScript>}
          */
         this.procedures = null;
         this.executableHat = false;
+        this.compatibilityStackFrame = null;
     }
 
     /**
@@ -316,12 +322,22 @@ class Thread {
         let blockID = this.peekStack();
         while (blockID !== null) {
             const block = this.target.blocks.getBlock(blockID);
-            if (
-                (typeof block !== 'undefined' && block.opcode === 'procedures_call') ||
-                this.peekStackFrame().waitingReporter
-            ) {
+
+            // Reporter form of procedures_call
+            if (this.peekStackFrame().waitingReporter) {
                 break;
             }
+
+            // Command form of procedures_call
+            if (typeof block !== 'undefined' && block.opcode === 'procedures_call') {
+                // By definition, if we get here, the procedure is done, so skip ahead so
+                // the arguments won't be re-evaluated and then discarded as frozen state
+                // about which arguments have been evaluated is lost.
+                // This fixes https://github.com/TurboWarp/scratch-vm/issues/201
+                this.goToNextBlock();
+                break;
+            }
+
             this.popStack();
             blockID = this.peekStack();
         }
@@ -440,7 +456,8 @@ class Thread {
         let callCount = 5; // Max number of enclosing procedure calls to examine.
         const sp = this.stackFrames.length - 1;
         for (let i = sp - 1; i >= 0; i--) {
-            const block = this.target.blocks.getBlock(this.stackFrames[i].op.id);
+            const block = this.target.blocks.getBlock(this.stackFrames[i].op.id) ||
+                this.target.runtime.flyoutBlocks.getBlock(this.stackFrames[i].op.id);
             if (block.opcode === 'procedures_call' &&
                 block.mutation.proccode === procedureCode) {
                 return true;
@@ -501,7 +518,14 @@ class Thread {
             this.procedures[procedureCode] = result.procedures[procedureCode](this);
         }
 
-        this.generator = result.startingFunction(this)();
+        const startingFunction = result.startingFunction(this);
+        if (result.yields) {
+            this.generator = startingFunction();
+            this.compiledFunction = null;
+        } else {
+            this.generator = null;
+            this.compiledFunction = startingFunction;
+        }
 
         this.executableHat = result.executableHat;
 

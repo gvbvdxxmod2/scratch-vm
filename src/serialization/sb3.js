@@ -24,6 +24,9 @@ const {deserializeCostume, deserializeSound} = require('./deserialize-assets.js'
 
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 
+
+var {getCompatFontData} = require("./gm2-lost-ish-ver-compatibility.js");
+
 /**
  * @typedef {object} ImportedProject
  * @property {Array.<Target>} targets - the imported Scratch 3.0 target objects.
@@ -1490,7 +1493,10 @@ const replaceUnsafeCharsInVariableIds = function (targets) {
  * @returns {void|Promise<void>} Resolves when the user has acknowledged any compatibilities, if any exist.
  */
 const checkPlatformCompatibility = (json, runtime) => {
-    if (!json.meta || !json.meta.platform || !json.meta.platform.name) {
+    if (!json.meta || !json.meta.platform) {
+        return;
+    }
+    if (!json.meta.platform.name) {
         return;
     }
 
@@ -1547,9 +1553,12 @@ const deserialize = async function (json, runtime, zip, isSingleSprite) {
     }
 
     // Extract any custom fonts before loading costumes.
+
+    var customFonts = await getCompatFontData(json);
+
     let fontPromise;
-    if (json.customFonts) {
-        fontPromise = runtime.fontManager.deserialize(json.customFonts, zip, isSingleSprite);
+    if (customFonts) {
+        fontPromise = runtime.fontManager.deserialize(customFonts, zip, isSingleSprite);
     } else {
         fontPromise = Promise.resolve();
     }

@@ -43,7 +43,7 @@ class ScratchExtensionAPI {
         return new Promise((resolve, reject) => {
             reader.onload = () => resolve(reader.result);
             reader.onerror = reject;
-            reader.readAsDataURL();
+            reader.readAsDataURL(blob);
         });
     }
 

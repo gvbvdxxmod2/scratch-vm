@@ -23,8 +23,10 @@ const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
 const ExtendedJSON = require('../util/tw-extended-json');
 const FontManager = require('./tw-font-manager');
 const MonitorState = require('./tw-monitor-state.js');
+const Sampler = require('./tw-sampler.js');
 const MonitorRecord = require('./monitor-record.js');
 const platform = require('./tw-platform.js');
+const safeStringify = require('../util/tw-safe-stringify.js');
 
 // Virtual I/O devices.
 const Clock = require('../io/clock');
@@ -417,6 +419,8 @@ class Runtime extends EventEmitter {
             limit: 1000
         };
 
+        this.sampler = new Sampler(this);
+
         const newCloudDataManager = cloudDataManager(this.cloudOptions);
 
         /**
@@ -501,6 +505,8 @@ class Runtime extends EventEmitter {
         this.extensionStorage = {};
 
         this.fontManager = new FontManager(this);
+
+        this.platform = platform;
 
         /**
          * TW: We support a "packaged runtime" mode. This can be used when:
@@ -2316,7 +2322,9 @@ class Runtime extends EventEmitter {
         interpolate.interpolate(this, progressInFrame);
 
         if (this.renderer) {
+            if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RENDERER;
             this.renderer.draw();
+            if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.IDLE;
         }
     }
 
@@ -2334,6 +2342,8 @@ class Runtime extends EventEmitter {
      * inactive threads after each iteration.
      */
     _step() {
+        if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RUNTIME;
+
         if (this.interpolationEnabled) {
             interpolate.setupInitialState(this);
         }
@@ -2393,7 +2403,9 @@ class Runtime extends EventEmitter {
             // Checking for the animation frame loop is more reliable than using
             // interpolationEnabled in some edge cases
             if (!document.hidden && !this.frameLoop._interpolationAnimation) {
+                if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RENDERER;
                 this.renderer.draw();
+                if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.RUNTIME;
             }
             if (this.profiler !== null) {
                 this.profiler.stop();
@@ -2418,6 +2430,8 @@ class Runtime extends EventEmitter {
         if (this.interpolationEnabled) {
             this._lastStepTime = Date.now();
         }
+
+        if (this.sampler.enableBasic) this.sampler.pc[0] = Sampler.IDLE;
     }
 
     /**
@@ -2893,11 +2907,13 @@ class Runtime extends EventEmitter {
      * @param {string} blockId ID for the block.
      * @param {string} value Value to show associated with the block.
      */
-    visualReport(blockId, value) {
-        this.emit(Runtime.VISUAL_REPORT, {
-            id: blockId,
-            value: String(value)
-        });
+    visualReport (target, blockId, value) {
+        if (target === this.getEditingTarget()) {
+            this.emit(Runtime.VISUAL_REPORT, {
+                id: blockId,
+                value: safeStringify(value)
+            });
+        }
     }
 
     /**
