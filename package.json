@@ -26,7 +26,8 @@
     "tap:integration": "tap ./test/integration/*.js",
     "test": "npm run lint && npm run docs && npm run tap",
     "watch": "webpack --progress --colors --watch",
-    "version": "json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\""
+    "version": "json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\"",
+    "postinstall": "npm add https://github.com/gvbvdxxmod2/scratch-storage.git"
   },
   "dependencies": {
     "@mediapipe/face_detection": "^0.4.1646425229",
