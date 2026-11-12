@@ -2,7 +2,7 @@ var beepbox = (function (exports) {
     'use strict';
 
     /*!
-    Copyright (c) 2012-2022 John Nesky and contributing authors
+    Copyright (c) John Nesky and contributing authors.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy of
     this software and associated documentation files (the "Software"), to deal in
@@ -23,6 +23,13 @@ var beepbox = (function (exports) {
     SOFTWARE.
     */
     class Config {
+        static _generateSineWave() {
+            const wave = new Float32Array(Config.sineWaveLength + 1);
+            for (let i = 0; i < Config.sineWaveLength + 1; i++) {
+                wave[i] = Math.sin(i * Math.PI * 2.0 / Config.sineWaveLength);
+            }
+            return wave;
+        }
     }
     Config.scales = toNameMap([
         { name: "easy :)", realName: "pentatonic major", flags: [true, false, true, false, true, false, false, true, false, true, false, false] },
@@ -288,7 +295,7 @@ var beepbox = (function (exports) {
     Config.detuneMax = Config.detuneCenter * 2;
     Config.sineWaveLength = 1 << 8;
     Config.sineWaveMask = Config.sineWaveLength - 1;
-    Config.sineWave = generateSineWave();
+    Config.sineWave = Config._generateSineWave();
     Config.pickedStringDispersionCenterFreq = 6000.0;
     Config.pickedStringDispersionFreqScale = 0.3;
     Config.pickedStringDispersionFreqMult = 4.0;
@@ -419,13 +426,6 @@ var beepbox = (function (exports) {
         }
         return combinedAmplitude;
     }
-    function generateSineWave() {
-        const wave = new Float32Array(Config.sineWaveLength + 1);
-        for (let i = 0; i < Config.sineWaveLength + 1; i++) {
-            wave[i] = Math.sin(i * Math.PI * 2.0 / Config.sineWaveLength);
-        }
-        return wave;
-    }
     function getArpeggioPitchIndex(pitchCount, rhythm, arpeggio) {
         const arpeggioPattern = Config.rhythms[rhythm].arpeggioPatterns[pitchCount - 1];
         if (arpeggioPattern != null) {
@@ -498,19 +498,178 @@ var beepbox = (function (exports) {
     }
     function reverseIndexBits(array, fullArrayLength) {
         const bitCount = countBits(fullArrayLength);
-        if (bitCount > 16)
-            throw new Error("FFT array length must not be greater than 2^16.");
-        const finalShift = 16 - bitCount;
+        const finalShift = 32 - bitCount;
         for (let i = 0; i < fullArrayLength; i++) {
             let j;
-            j = ((i & 0xaaaa) >> 1) | ((i & 0x5555) << 1);
-            j = ((j & 0xcccc) >> 2) | ((j & 0x3333) << 2);
-            j = ((j & 0xf0f0) >> 4) | ((j & 0x0f0f) << 4);
-            j = ((j >> 8) | ((j & 0xff) << 8)) >> finalShift;
+            j = ((i >> 1) & 0x55555555) | ((i & 0x55555555) << 1);
+            j = ((j >> 2) & 0x33333333) | ((j & 0x33333333) << 2);
+            j = ((j >> 4) & 0x0F0F0F0F) | ((j & 0x0F0F0F0F) << 4);
+            j = ((j >> 8) & 0x00FF00FF) | ((j & 0x00FF00FF) << 8);
+            j = ((j >> 16) & 0x0000FFFF) | ((j & 0x0000FFFF) << 16);
+            j = j >>> finalShift;
             if (j > i) {
                 let temp = array[i];
                 array[i] = array[j];
                 array[j] = temp;
+            }
+        }
+    }
+    function fastFourierTransform(realArray, imagArray) {
+        const fullArrayLength = realArray.length;
+        if (!isPowerOf2(fullArrayLength))
+            throw new Error("FFT array length must be a power of 2.");
+        if (fullArrayLength < 4)
+            throw new Error("FFT array length must be at least 4.");
+        if (fullArrayLength != imagArray.length)
+            throw new Error("FFT arrays must be the same length.");
+        reverseIndexBits(realArray, fullArrayLength);
+        reverseIndexBits(imagArray, fullArrayLength);
+        for (let startIndex = 0; startIndex < fullArrayLength; startIndex += 4) {
+            const startIndex1 = startIndex + 1;
+            const startIndex2 = startIndex + 2;
+            const startIndex3 = startIndex + 3;
+            const real0 = realArray[startIndex];
+            const real1 = realArray[startIndex1];
+            const real2 = realArray[startIndex2];
+            const real3 = realArray[startIndex3];
+            const imag0 = imagArray[startIndex];
+            const imag1 = imagArray[startIndex1];
+            const imag2 = imagArray[startIndex2];
+            const imag3 = imagArray[startIndex3];
+            const realTemp0 = real0 + real1;
+            const realTemp1 = real0 - real1;
+            const realTemp2 = real2 + real3;
+            const realTemp3 = real2 - real3;
+            const imagTemp0 = imag0 + imag1;
+            const imagTemp1 = imag0 - imag1;
+            const imagTemp2 = imag2 + imag3;
+            const imagTemp3 = imag2 - imag3;
+            realArray[startIndex] = realTemp0 + realTemp2;
+            realArray[startIndex1] = realTemp1 + imagTemp3;
+            realArray[startIndex2] = realTemp0 - realTemp2;
+            realArray[startIndex3] = realTemp1 - imagTemp3;
+            imagArray[startIndex] = imagTemp0 + imagTemp2;
+            imagArray[startIndex1] = imagTemp1 - realTemp3;
+            imagArray[startIndex2] = imagTemp0 - imagTemp2;
+            imagArray[startIndex3] = imagTemp1 + realTemp3;
+        }
+        for (let stride = 8; stride <= fullArrayLength; stride += stride) {
+            const halfLength = stride >>> 1;
+            const radiansIncrement = Math.PI * 2.0 / stride;
+            const cosIncrement = Math.cos(radiansIncrement);
+            const sinIncrement = Math.sin(radiansIncrement);
+            const oscillatorMultiplier = 2.0 * cosIncrement;
+            for (let startIndex = 0; startIndex < fullArrayLength; startIndex += stride) {
+                let c = 1.0;
+                let s = 0.0;
+                let cPrev = cosIncrement;
+                let sPrev = sinIncrement;
+                const secondHalf = startIndex + halfLength;
+                for (let i = startIndex; i < secondHalf; i++) {
+                    const j = i + halfLength;
+                    const real0 = realArray[i];
+                    const imag0 = imagArray[i];
+                    const real1 = realArray[j] * c - imagArray[j] * s;
+                    const imag1 = realArray[j] * s + imagArray[j] * c;
+                    realArray[i] = real0 + real1;
+                    imagArray[i] = imag0 + imag1;
+                    realArray[j] = real0 - real1;
+                    imagArray[j] = imag0 - imag1;
+                    const cTemp = oscillatorMultiplier * c - cPrev;
+                    const sTemp = oscillatorMultiplier * s - sPrev;
+                    cPrev = c;
+                    sPrev = s;
+                    c = cTemp;
+                    s = sTemp;
+                }
+            }
+        }
+    }
+    function forwardRealFourierTransform(array) {
+        const fullArrayLength = array.length;
+        const totalPasses = countBits(fullArrayLength);
+        if (fullArrayLength < 4)
+            throw new Error("FFT array length must be at least 4.");
+        reverseIndexBits(array, fullArrayLength);
+        for (let index = 0; index < fullArrayLength; index += 4) {
+            const index1 = index + 1;
+            const index2 = index + 2;
+            const index3 = index + 3;
+            const real0 = array[index];
+            const real1 = array[index1];
+            const real2 = array[index2];
+            const real3 = array[index3];
+            const tempA = real0 + real1;
+            const tempB = real2 + real3;
+            array[index] = tempA + tempB;
+            array[index1] = real0 - real1;
+            array[index2] = tempA - tempB;
+            array[index3] = real2 - real3;
+        }
+        const sqrt2over2 = Math.sqrt(2.0) / 2.0;
+        for (let index = 0; index < fullArrayLength; index += 8) {
+            const index1 = index + 1;
+            const index3 = index + 3;
+            const index4 = index + 4;
+            const index5 = index + 5;
+            const index7 = index + 7;
+            const real0 = array[index];
+            const real1 = array[index1];
+            const imag3 = array[index3];
+            const real4 = array[index4];
+            const real5 = array[index5];
+            const imag7 = array[index7];
+            const tempA = (real5 - imag7) * sqrt2over2;
+            const tempB = (real5 + imag7) * sqrt2over2;
+            array[index] = real0 + real4;
+            array[index1] = real1 + tempA;
+            array[index3] = real1 - tempA;
+            array[index4] = real0 - real4;
+            array[index5] = tempB - imag3;
+            array[index7] = tempB + imag3;
+        }
+        for (let pass = 3; pass < totalPasses; pass++) {
+            const subStride = 1 << pass;
+            const midSubStride = subStride >> 1;
+            const stride = subStride << 1;
+            const radiansIncrement = Math.PI * 2.0 / stride;
+            const cosIncrement = Math.cos(radiansIncrement);
+            const sinIncrement = Math.sin(radiansIncrement);
+            const oscillatorMultiplier = 2.0 * cosIncrement;
+            for (let startIndex = 0; startIndex < fullArrayLength; startIndex += stride) {
+                const startIndexA = startIndex;
+                const startIndexB = startIndexA + subStride;
+                const stopIndex = startIndexB + subStride;
+                const realStartA = array[startIndexA];
+                const realStartB = array[startIndexB];
+                array[startIndexA] = realStartA + realStartB;
+                array[startIndexB] = realStartA - realStartB;
+                let c = cosIncrement;
+                let s = -sinIncrement;
+                let cPrev = 1.0;
+                let sPrev = 0.0;
+                for (let index = 1; index < midSubStride; index++) {
+                    const indexA0 = startIndexA + index;
+                    const indexA1 = startIndexB - index;
+                    const indexB0 = startIndexB + index;
+                    const indexB1 = stopIndex - index;
+                    const real0 = array[indexA0];
+                    const imag0 = array[indexA1];
+                    const real1 = array[indexB0];
+                    const imag1 = array[indexB1];
+                    const tempA = real1 * c + imag1 * s;
+                    const tempB = real1 * s - imag1 * c;
+                    array[indexA0] = real0 + tempA;
+                    array[indexA1] = real0 - tempA;
+                    array[indexB0] = -imag0 - tempB;
+                    array[indexB1] = imag0 - tempB;
+                    const cTemp = oscillatorMultiplier * c - cPrev;
+                    const sTemp = oscillatorMultiplier * s - sPrev;
+                    cPrev = c;
+                    sPrev = s;
+                    c = cTemp;
+                    s = sTemp;
+                }
             }
         }
     }
@@ -2195,6 +2354,7 @@ var beepbox = (function (exports) {
                                 this.drumsetSpectrumWaves[j].spectrum[i] = Math.max(0, Math.min(Config.spectrumMax, Math.round(Config.spectrumMax * (+drum["spectrum"][i]) / 100)));
                             }
                         }
+                        this.drumsetSpectrumWaves[j].markCustomWaveDirty();
                     }
                 }
             }
@@ -5040,72 +5200,6 @@ var beepbox = (function (exports) {
         }
     }
     class Synth {
-        constructor(song = null) {
-            this.samplesPerSecond = 44100;
-            this.song = null;
-            this.preferLowerLatency = false;
-            this.anticipatePoorPerformance = false;
-            this.liveInputDuration = 0;
-            this.liveInputStarted = false;
-            this.liveInputPitches = [];
-            this.liveInputChannel = 0;
-            this.liveInputInstruments = [];
-            this.loopRepeatCount = -1;
-            this.volume = 1.0;
-            this.enableMetronome = false;
-            this.countInMetronome = false;
-            this.playheadInternal = 0.0;
-            this.bar = 0;
-            this.prevBar = null;
-            this.nextBar = null;
-            this.beat = 0;
-            this.part = 0;
-            this.tick = 0;
-            this.isAtStartOfTick = true;
-            this.tickSampleCountdown = 0;
-            this.isPlayingSong = false;
-            this.isRecording = false;
-            this.liveInputEndTime = 0.0;
-            this.browserAutomaticallyClearsAudioBuffer = true;
-            this.tempDrumSetControlPoint = new FilterControlPoint();
-            this.tempFrequencyResponse = new FrequencyResponse();
-            this.channels = [];
-            this.tonePool = new Deque();
-            this.tempMatchedPitchTones = Array(Config.maxChordSize).fill(null);
-            this.startedMetronome = false;
-            this.metronomeSamplesRemaining = -1;
-            this.metronomeAmplitude = 0.0;
-            this.metronomePrevAmplitude = 0.0;
-            this.metronomeFilter = 0.0;
-            this.limit = 0.0;
-            this.tempMonoInstrumentSampleBuffer = null;
-            this.audioCtx = null;
-            this.scriptNode = null;
-            this.audioProcessCallback = (audioProcessingEvent) => {
-                const outputBuffer = audioProcessingEvent.outputBuffer;
-                const outputDataL = outputBuffer.getChannelData(0);
-                const outputDataR = outputBuffer.getChannelData(1);
-                if (this.browserAutomaticallyClearsAudioBuffer && (outputDataL[0] != 0.0 || outputDataR[0] != 0.0 || outputDataL[outputBuffer.length - 1] != 0.0 || outputDataR[outputBuffer.length - 1] != 0.0)) {
-                    this.browserAutomaticallyClearsAudioBuffer = false;
-                }
-                if (!this.browserAutomaticallyClearsAudioBuffer) {
-                    const length = outputBuffer.length;
-                    for (let i = 0; i < length; i++) {
-                        outputDataL[i] = 0.0;
-                        outputDataR[i] = 0.0;
-                    }
-                }
-                if (!this.isPlayingSong && performance.now() >= this.liveInputEndTime) {
-                    this.deactivateAudio();
-                }
-                else {
-                    this.synthesize(outputDataL, outputDataR, outputBuffer.length, this.isPlayingSong);
-                }
-            };
-            this.computeDelayBufferSizes();
-            if (song != null)
-                this.setSong(song);
-        }
         syncSongState() {
             const channelCount = this.song.getChannelCount();
             for (let i = this.channels.length; i < channelCount; i++) {
@@ -5193,6 +5287,72 @@ var beepbox = (function (exports) {
                 bars += this.song.barCount - (this.song.loopStart + this.song.loopLength);
             return bars;
         }
+        constructor(song = null) {
+            this.samplesPerSecond = 44100;
+            this.song = null;
+            this.preferLowerLatency = false;
+            this.anticipatePoorPerformance = false;
+            this.liveInputDuration = 0;
+            this.liveInputStarted = false;
+            this.liveInputPitches = [];
+            this.liveInputChannel = 0;
+            this.liveInputInstruments = [];
+            this.loopRepeatCount = -1;
+            this.volume = 1.0;
+            this.enableMetronome = false;
+            this.countInMetronome = false;
+            this.playheadInternal = 0.0;
+            this.bar = 0;
+            this.prevBar = null;
+            this.nextBar = null;
+            this.beat = 0;
+            this.part = 0;
+            this.tick = 0;
+            this.isAtStartOfTick = true;
+            this.tickSampleCountdown = 0;
+            this.isPlayingSong = false;
+            this.isRecording = false;
+            this.liveInputEndTime = 0.0;
+            this.browserAutomaticallyClearsAudioBuffer = true;
+            this.tempDrumSetControlPoint = new FilterControlPoint();
+            this.tempFrequencyResponse = new FrequencyResponse();
+            this.channels = [];
+            this.tonePool = new Deque();
+            this.tempMatchedPitchTones = Array(Config.maxChordSize).fill(null);
+            this.startedMetronome = false;
+            this.metronomeSamplesRemaining = -1;
+            this.metronomeAmplitude = 0.0;
+            this.metronomePrevAmplitude = 0.0;
+            this.metronomeFilter = 0.0;
+            this.limit = 0.0;
+            this.tempMonoInstrumentSampleBuffer = null;
+            this.audioCtx = null;
+            this.scriptNode = null;
+            this.audioProcessCallback = (audioProcessingEvent) => {
+                const outputBuffer = audioProcessingEvent.outputBuffer;
+                const outputDataL = outputBuffer.getChannelData(0);
+                const outputDataR = outputBuffer.getChannelData(1);
+                if (this.browserAutomaticallyClearsAudioBuffer && (outputDataL[0] != 0.0 || outputDataR[0] != 0.0 || outputDataL[outputBuffer.length - 1] != 0.0 || outputDataR[outputBuffer.length - 1] != 0.0)) {
+                    this.browserAutomaticallyClearsAudioBuffer = false;
+                }
+                if (!this.browserAutomaticallyClearsAudioBuffer) {
+                    const length = outputBuffer.length;
+                    for (let i = 0; i < length; i++) {
+                        outputDataL[i] = 0.0;
+                        outputDataR[i] = 0.0;
+                    }
+                }
+                if (!this.isPlayingSong && performance.now() >= this.liveInputEndTime) {
+                    this.deactivateAudio();
+                }
+                else {
+                    this.synthesize(outputDataL, outputDataR, outputBuffer.length, this.isPlayingSong);
+                }
+            };
+            this.computeDelayBufferSizes();
+            if (song != null)
+                this.setSong(song);
+        }
         setSong(song) {
             if (typeof (song) == "string") {
                 this.song = new Song(song);
@@ -5209,7 +5369,7 @@ var beepbox = (function (exports) {
             this.chorusDelayBufferMask = this.chorusDelayBufferSize - 1;
         }
         activateAudio() {
-            const bufferSize = this.anticipatePoorPerformance ? (this.preferLowerLatency ? 2048 : 4096) : (this.preferLowerLatency ? 512 : 2048);
+            const bufferSize = this.anticipatePoorPerformance ? (this.preferLowerLatency ? 2048 : 4096) : (this.preferLowerLatency ? 1024 : 2048);
             if (this.audioCtx == null || this.scriptNode == null || this.scriptNode.bufferSize != bufferSize) {
                 if (this.scriptNode != null)
                     this.deactivateAudio();
@@ -7746,8 +7906,8 @@ var beepbox = (function (exports) {
             const beatsPerMinute = this.song.getBeatsPerMinute();
             const beatsPerSecond = beatsPerMinute / 60.0;
             const partsPerSecond = Config.partsPerBeat * beatsPerSecond;
-            const tickPerSecond = Config.ticksPerPart * partsPerSecond;
-            return this.samplesPerSecond / tickPerSecond;
+            const ticksPerSecond = Config.ticksPerPart * partsPerSecond;
+            return this.samplesPerSecond / ticksPerSecond;
         }
         static fittingPowerOfTwo(x) {
             return 1 << (32 - Math.clz32(Math.ceil(x) - 1));
@@ -7884,9 +8044,12 @@ var beepbox = (function (exports) {
 
     exports.Channel = Channel;
     exports.Config = Config;
+    exports.DynamicBiquadFilter = DynamicBiquadFilter;
     exports.EnvelopeSettings = EnvelopeSettings;
+    exports.FilterCoefficients = FilterCoefficients;
     exports.FilterControlPoint = FilterControlPoint;
     exports.FilterSettings = FilterSettings;
+    exports.FrequencyResponse = FrequencyResponse;
     exports.HarmonicsWave = HarmonicsWave;
     exports.Instrument = Instrument;
     exports.Note = Note;
@@ -7896,6 +8059,9 @@ var beepbox = (function (exports) {
     exports.SpectrumWave = SpectrumWave;
     exports.Synth = Synth;
     exports.clamp = clamp;
+    exports.fastFourierTransform = fastFourierTransform;
+    exports.forwardRealFourierTransform = forwardRealFourierTransform;
+    exports.inverseRealFourierTransform = inverseRealFourierTransform;
     exports.makeNotePin = makeNotePin;
 
     Object.defineProperty(exports, '__esModule', { value: true });
