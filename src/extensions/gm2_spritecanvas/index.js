@@ -219,7 +219,7 @@ class SpriteCanvases {
         runtime.on("PROJECT_START", () => this.resetEverything());
 
         runtime.on("BEFORE_EXECUTE", () => {
-            for (const skin of renderer._allSkins) {
+            for (const skin of runtime.renderer._allSkins) {
                 if (skin instanceof CanvasSkin) {
                     skin.markVideoDirty();
                 }
@@ -280,9 +280,9 @@ class SpriteCanvases {
         return {
             id: "spritecanvas",
             name: "Sprite Canvases",
-            color1: "#bfff6b",
-            color2: "#c0ff54",
-            color3: "#88e02f",
+            color1: "#92c84a",
+            color2: "#83ae39",
+            color3: "#416e15",
             blocks: [{
                     opcode: "showSkin",
                     text: "Set skin on sprite [TARGET] to canvas called [NAME]",

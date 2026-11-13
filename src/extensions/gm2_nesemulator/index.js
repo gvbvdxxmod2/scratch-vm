@@ -1,17 +1,11 @@
-/*
-I want to let you know,
-that Gvbvdxx (Me) created this extension.
-
-I did not make JSNes though, because I dont want to
-spend time making a JavaScript NES emulator from scratch.
-
-This took a bunch of hours to make. (and a lot of debugging)
-
-So please give credit if you want to use this extension in
-your own scratch mod.
-
-By the way, the code for this is pretty large, wich means
-that it will take a while to compile.
+/**
+ * This Extension is created by GVBVDXX ©2026.
+ * Please credit if you use this extension.
+ * I didn't create the JSNES emulation library used here though.
+ * 
+ * Note: This extension had a bug where it would crash on certian runtime events,
+ *   that is fixed in this version if you want to use it.
+ * 
  */
 
 //I know, this is an insanly large extension.
@@ -249,7 +243,7 @@ class NesEmulator {
         runtime.on("PROJECT_START", () => this.resetEverything());
 
         runtime.on("BEFORE_EXECUTE", () => {
-            for (const skin of renderer._allSkins) {
+            for (const skin of runtime.renderer._allSkins) {
                 if (skin instanceof NESSkin) {
                     skin.markVideoDirty();
                 }
