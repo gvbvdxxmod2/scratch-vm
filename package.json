@@ -46,7 +46,7 @@
     "html-webpack-plugin": "4.2.0",
     "htmlparser2": "3.10.0",
     "immutable": "3.8.2",
-    "jszip": "^3.1.5",
+    "@gvbvdxxmod2/jszip": "git+https://github.com/gvbvdxxmod2/jszip.git",
     "minilog": "3.1.0",
     "scratch-audio": "git+https://github.com/gvbmod/scratch-audio.git",
     "scratch-blocks": "git+https://github.com/gvbvdxxmod2/scratch-blocks.git",
@@ -55,7 +55,7 @@
     "scratch-render-fonts": "git+https://github.com/gvbvdxxmod2/scratch-render-fonts.git",
     "scratch-sb1-converter": "0.2.7",
     "scratch-storage": "git+https://github.com/gvbvdxxmod2/scratch-storage.git",
-    "scratch-svg-renderer": "git+https://github.com/gvbmod/scratch-svg-renderer.git",
+    "scratch-svg-renderer": "git+https://github.com/gvbvdxxmod2/scratch-svg-renderer.git",
     "scratch-translate-extension-languages": "0.0.20191118205314",
     "text-encoding": "0.7.0",
     "worker-loader": "^1.1.1"
