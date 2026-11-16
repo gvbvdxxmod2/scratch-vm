@@ -1,3 +1,4 @@
+const log = require('../util/log');
 
 class ExtensionType {
     //Syncronously loaded extensions, for extensions that need to be ready as soon as possible.

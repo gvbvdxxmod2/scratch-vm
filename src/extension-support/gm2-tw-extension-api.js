@@ -7,6 +7,7 @@ var TargetType = require('./target-type');
 var log = require('../util/log');
 var external = require("./tw-external.js");
 
+
 class ScratchExtensionAPI {
 	constructor (extensionCode, vm, runtime) {		
 		this.log = log;

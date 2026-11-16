@@ -1,3 +1,4 @@
+const log = require('../util/log');
 var ScratchExtensionAPI = require("./gm2-tw-extension-api.js");
 
 class ExtensionRunner {
