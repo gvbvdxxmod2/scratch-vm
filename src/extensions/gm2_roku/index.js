@@ -157,7 +157,10 @@ class roku {
     getInfo () {
         return {
             id: 'roku',
-            name: 'Roku',
+            name: 'Roku Controls',
+			color1: "#7800c8",
+            color2: "#7400a9",
+            color3: "#25003a",
 			blockIconURI: blockIconURI,
             blocks: [
                 {

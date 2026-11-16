@@ -1,6 +1,7 @@
 /**
 Gamepad Extension By: Gvbvdxx
 (C) Gvbvdxx 2022
+Improved in 2026
 */
 
 const ArgumentType = require('../../extension-support/argument-type');
@@ -8,6 +9,11 @@ const BlockType = require('../../extension-support/block-type');
 const Cast = require('../../util/cast');
 const Runtime = require('../../../src/engine/runtime');
 const Sprite = require('../../../src/sprites/sprite.js');
+
+const {
+	GAMEPAD_PLAYERS,
+    GAMEPAD_BUTTONS
+} = require("./constants.js");
 
 var ConnectedGamepads = [];
 var MAX_GAMEPADS = 4;
@@ -54,8 +60,8 @@ class GamepadExtension {
 			disconnect: false,
 		};
 
-		this.runtime.on("BEFORE_EXECUTE", this._checkHatStates);
-		this.runtime.on("AFTER_EXECUTE", this._resetHatStates);
+		this.runtime.on("BEFORE_EXECUTE", this._checkHatStates.bind(this));
+		this.runtime.on("AFTER_EXECUTE", this._resetHatStates.bind(this));
     }
 
 	_checkHatStates () {
@@ -64,9 +70,9 @@ class GamepadExtension {
 		if (this._connected !== connectedCount) {
 			var last = this._connected;
 			this._connected = connectedCount;
-			if (last < connectedCount) {
+			if (connectedCount > last) {
 				states.connect = true;
-			} else if (last > connectedCount) {
+			} else if (connectedCount < last) {
 				states.disconnect = false;
 			}
 		}
@@ -106,6 +112,17 @@ class GamepadExtension {
 			}
 		}
 		return false;
+	}
+
+	_getGamepadCount() {
+		var count = 0;
+		for (var gamepad of ConnectedGamepads) {
+			if (gamepad) {
+				count += 1;
+			}
+		}
+
+		return count;
 	}
 
     getInfo () {
@@ -241,6 +258,13 @@ class GamepadExtension {
                     arguments: {}
                 },
 				{
+                    opcode: 'gm2GetConnectedGamepads',
+					name: 'Gamepads connected',
+                    blockType: BlockType.REPORTER,
+                    text: 'Gamepads connected',
+                    arguments: {}
+                },
+				{
                     opcode: 'gm2WhenGamepadConnected',
 					name: 'When a gamepad connects',
                     blockType: BlockType.HAT,
@@ -258,106 +282,86 @@ class GamepadExtension {
             menus: {
 				gamepadnum:{
 					acceptReporters: true,
-					items: [
-						{
-							text:"Player 1",
-							value:"1"
-						},
-						{
-							text:"Player 2",
-							value:"2"
-						},
-						{
-							text:"Player 3",
-							value:"3"
-						},
-						{
-							text:"Player 4",
-							value:"4"
-						}
-					]
+					items: Object.keys(GAMEPAD_PLAYERS).map((name) => ({text: name, value: ""+GAMEPAD_PLAYERS[name]}))
 				},
 				gamepadbtn: {
 					acceptReporters: true,
-					items:[
-						{
-							text:"Button B (Nintendo Map)",
-							value:"1"
-						},
-						{
-							text:"Button A (Nintendo Map)",
-							value:"2"
-						},
-						{
-							text:"Button Y (Nintendo Map)",
-							value:"3"
-						},
-						{
-							text:"Button X (Nintendo Map)",
-							value:"4"
-						},
-						{
-							text:"Trigger R (Nintendo Map)",
-							value:"6"
-						},
-						{
-							text:"Trigger ZR (Nintendo Map)",
-							value:"8"
-						},
-						{
-							text:"Trigger ZL (Nintendo Map)",
-							value:"7"
-						},
-						{
-							text:"Trigger L (Nintendo Map)",
-							value:"5"
-						},
-						{
-							text:"Button Start/+ (Nintendo Map)",
-							value:"10"
-						},
-						{
-							text:"Button Select/- (Nintendo Map)",
-							value:"9"
-						}
-					]
+					items: Object.keys(GAMEPAD_BUTTONS).map((name) => ({text: name, value: ""+GAMEPAD_BUTTONS[name]}))
 				}
             }
         };
     }
 
 	getgamepadX (args) {
-		var num = 0;
-		try{num = (navigator.getGamepads()[Number(args.player)-1].axes[0]*10);}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+		if (!gamepad) {
+			return 0;
+		}
+
+		if (!gamepad.axes) {
+			return 0;
+		}
+
+		return gamepad.axes[0] * 10;
 	}
 	getgamepadY (args) {
-		var num = 0;
-		try{num = (navigator.getGamepads()[Number(args.player)-1].axes[1]*-10);}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+		if (!gamepad) {
+			return 0;
+		}
+
+		if (!gamepad.axes) {
+			return 0;
+		}
+		
+		return gamepad.axes[1] * -10;
 	}
 
 	getgamepad2ndX (args) {
-		var num = 0;
-		try{num = (navigator.getGamepads()[Number(args.player)-1].axes[2]*10);}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+		if (!gamepad) {
+			return 0;
+		}
+
+		if (!gamepad.axes) {
+			return 0;
+		}
+		
+		return gamepad.axes[2] * 10;
 	}
 	getgamepad2ndY (args) {
-		var num = 0;
-		try{num = (navigator.getGamepads()[Number(args.player)-1].axes[3]*-10);}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+		if (!gamepad) {
+			return 0;
+		}
+
+		if (!gamepad.axes) {
+			return 0;
+		}
+		
+		return gamepad.axes[3] * -10;
 	}
 
 	getgamepadButton (args) {
-		var num = false;
-		try{num = navigator.getGamepads()[Number(args.player)-1].buttons[Number(args.btn)-1].pressed;}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+		if (!gamepad) {
+			return false;
+		}
+
+		var buttonIndex = (+args.btn || 0) - 1;
+		var button = gamepad.buttons[buttonIndex];
+
+		if (!button) {
+			return false;
+		}
+
+		return !!button.pressed;
 	}
 
 	getgamepadConnected (args) {
-		var num = false;
-		try{num = navigator.getGamepads()[Number(args.player)-1].connected;}catch(e){}
-		return num;
+		var gamepad = this._getGamepadFromNum(args.player);
+
+		return !!gamepad;
 	}
 
 	vibratecontroler (args) {
@@ -374,6 +378,8 @@ class GamepadExtension {
 		if (!this._supportsVibration(gamepad)) {
 			return;
 		}
+		
+		try{
 		if (duration <= 0) {
 			try{
 				gamepad.vibrationActuator.reset();
@@ -381,9 +387,7 @@ class GamepadExtension {
 				console.error(`Unable to reset vibration effect for gamepad: `, gamepad, " Error:", e);
 			}
 			return;
-		}
-		try{
-			gamepad.vibrationActuator.playEffect("dual-rumble", {
+		}	gamepad.vibrationActuator.playEffect("dual-rumble", {
 				startDelay: 0,
 				duration: (1000*duration),
 				weakMagnitude: 0.8,
@@ -422,6 +426,15 @@ class GamepadExtension {
 			return;
 		}
 
+		if (duration <= 0) {
+			try{
+				gamepad.vibrationActuator.reset();
+			}catch(e){
+				console.error(`Unable to reset vibration effect for gamepad: `, gamepad, " Error:", e);
+			}
+			return;
+		}
+
 		try{
 			gamepad.vibrationActuator.playEffect("dual-rumble", {
 				startDelay: 0,
@@ -446,7 +459,7 @@ class GamepadExtension {
 	}
 
 	gm2GetConnectedGamepads() {
-		return ConnectedGamepads.length;
+		return this._getGamepadCount();
 	}
 
 	gm2WhenGamepadConnected() {
