@@ -155,7 +155,7 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
             );
           }
         }
-      }, 1000 / 45); //Variable tracking rate, capped at 45 fps because i don't know it its possible to oversend to the server.
+      }, 1000 / 100); //Variable tracking rate.
 
       t._handleMessage = function (data) {
         var ws = t.websocket;
