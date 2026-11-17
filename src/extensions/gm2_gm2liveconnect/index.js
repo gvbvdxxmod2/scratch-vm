@@ -48,6 +48,8 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
       this.isReady = false;
       this.requestedToConnect = false;
       this.inConnectLoop = false;
+      this.maxConnectionAttempts = 10;
+      this.connectLoopAttempts = 0;
 
       this.disconnectOnProjectStop = false;
 
@@ -204,7 +206,7 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
           if (typeof users == "object" && Array.isArray(users)) {
             clidata.connectedUsers = users;
           }
-          t.runtime.startHats(extid + "_whenUserListUpdated");
+          t.runtime.startHats(EXTENSION_ID + "_whenUserListUpdated");
         }
         if (json.type == "newID") {
           t.isReady = true;
@@ -233,13 +235,26 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
         if (!t.requestedToConnect) {
           return; //Connection loop ends here if the connection was closed and was actually wanting to be closed.
         }
+        t.connectLoopAttempts += 1;
+        if (t.connectLoopAttempts > t.maxConnectionAttempts) {
+          t._closeConnectLoop();
+          return;
+        }
         t.connected = false;
         t.isReady = false;
         t._resetClientData();
-        var ws = new WebSocket(t.targetWebsocketURI);
+        try{
+          var ws = new WebSocket(t.targetWebsocketURI);
+        }catch(e){
+          console.error(`WebSocket creation error: `,e);
+          t._closeConnectLoop();
+          return;
+        }
         t.websocket = ws;
         ws.onopen = function () {
+          t.connectBlockActive = false;
           t.connected = true;
+          t.connectLoopAttempts = 0;
         };
         ws.onclose = function () {
           t.connected = false;
@@ -253,18 +268,29 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
         };
       };
       t._closeConnectLoop = function () {
-        if (!t.websocket) {
-          return; //Already closed, no need to close twice.
-        }
+        t.connectLoopAttempts = 0;
         t.requestedToConnect = false;
         t.inConnectLoop = false;
         t.connected = false;
         t.isReady = false;
+        t.connectBlockActive = false;
         t._resetClientData();
+        
+        if (!t.websocket) {
+          return; //Already closed, no need to close twice.
+        }
         var ws = t.websocket;
         ws.onclose = function () {}; //To prevent overlaps and stuff to avoid bugs.
         ws.close();
         t.websocket = null;
+      };
+
+      t._startConnectionLoop = function () {
+        t._closeConnectLoop();
+        t.connectLoopAttempts = 0;
+        t.requestedToConnect = true;
+        t.connectBlockActive = true;
+        t._connectLoop();
       };
     }
 
@@ -344,6 +370,23 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
             opcode: "getIsReady",
             blockType: BlockType.BOOLEAN,
             text: "Server is ready?",
+            arguments: {},
+          },
+          {
+            opcode: "setMaxConnectionAttempts",
+            blockType: BlockType.COMMAND,
+            text: "Set max connection attempts to [attempts]",
+            arguments: {
+              attempts: {
+                type: ArgumentType.NUMBER,
+                defaultValue: 10,
+              }
+            },
+          },
+          {
+            opcode: "getMaxConnectionAttempts",
+            blockType: BlockType.REPORTER,
+            text: "Max connection attempts",
             arguments: {},
           },
           "---",
@@ -625,12 +668,21 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
       return this.isReady;
     }
 
+    setMaxConnectionAttempts(args) {
+      var connectionAttempts = +args.attempts || 0;
+      if (connectionAttempts < 1) {
+        connectionAttempts = 1;
+      }
+      this.maxConnectionAttempts = connectionAttempts;
+    }
+    getMaxConnectionAttempts() {
+      return this.maxConnectionAttempts;
+    }
+
     connectCloud(args) {
       try {
         this.targetWebsocketURI = Cast.toString(args.uri);
-        this._closeConnectLoop();
-        this.requestedToConnect = true;
-        this._connectLoop();
+        this._startConnectionLoop();
       } catch (e) {
         this.targetWebsocketURI = "";
       }
@@ -639,17 +691,15 @@ const DEFAULT_SERVER_URI = window.location.protocol == "http:" ? "ws://..." : "w
     connectCloudAndWait(args) {
       try {
         this.targetWebsocketURI = Cast.toString(args.uri);
-        this._closeConnectLoop();
-        this.requestedToConnect = true;
-        this._connectLoop();
+        this._startConnectionLoop();
         var t = this;
         return new Promise((accept) => {
           var inter = setInterval(() => {
-            if (t.connected) {
+            if (!t.connectBlockActive) {
               accept();
               clearInterval(inter);
             }
-          });
+          },1000/30);
         });
       } catch (e) {
         this.targetWebsocketURI = "";
